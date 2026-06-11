@@ -203,7 +203,7 @@ export default function Billing() {
                     {overview?.billing?.total_balance?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 }) ?? '-'}
                   </Box>
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400, flexShrink: 0 }}>
-                    已用 {overview?.usage?.credits?.toFixed(6) ?? '-'}
+                    已用 {overview?.usage?.credits?.toFixed(3) ?? '-'}
                   </Typography>
                 </Typography>
               </CardContent>
@@ -218,38 +218,6 @@ export default function Billing() {
             </Card>
           </Grid>
         </Grid>
-
-        {/* Key usage */}
-        {overview && overview.key_usage && overview.key_usage.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Card>
-              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  密钥用量
-                  <Chip size="small" label={overview.key_usage.length} color="primary" variant="outlined" />
-                </Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ py: 0.5 }}>密钥</TableCell>
-                      <TableCell sx={{ py: 0.5 }} align="right">Token</TableCell>
-                      <TableCell sx={{ py: 0.5 }} align="right">积分</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {overview.key_usage.map(k => (
-                      <TableRow key={k.key}>
-                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>{k.key.length > 20 ? `${k.key.slice(0, 10)}...${k.key.slice(-6)}` : k.key}</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">{formatNum(k.tokens)}</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">{k.credits.toFixed(6)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
 
         {/* Model costs */}
         {overview && overview.model_costs.length > 0 && (
@@ -322,51 +290,48 @@ export default function Billing() {
         )}
       </Box>
 
-      {/* Query Section */}
+      {/* Query + Keys */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>查询余额</Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <TextField size="small" label="计费密钥" value={query}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+            <Typography variant="h6" sx={{ mr: 1 }}>计费密钥</Typography>
+            <TextField size="small" label="密钥查询" value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="输入计费密钥查询余额"
+              placeholder="输入密钥查询余额"
               onKeyDown={e => e.key === 'Enter' && handleQuery()}
-              sx={{ flex: '1 1 200px', minWidth: 200 }} />
-            <Button variant="outlined" startIcon={<SearchIcon />} onClick={handleQuery} disabled={loading} sx={{ whiteSpace: 'nowrap' }}>
-              查询
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateDialog(true)} sx={{ whiteSpace: 'nowrap' }}>
-              新建
-            </Button>
+              sx={{ flex: '1 1 200px', minWidth: 180 }} />
+            <Button variant="outlined" startIcon={<SearchIcon />} onClick={handleQuery} disabled={loading}>查询</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateDialog(true)}>新建</Button>
           </Box>
-        </CardContent>
-      </Card>
-
-      {/* Keys List */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>计费密钥</Typography>
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ maxHeight: 480 }}>
+            <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell>密钥</TableCell>
-                  <TableCell>余额</TableCell>
-                  <TableCell>等级</TableCell>
-                  <TableCell align="right">操作</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>密钥</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>余额</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>已用余额</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>已用词元</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>等级</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {keys.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={6} align="center">
                       <Typography sx={{ color: 'text.secondary', py: 4 }}>输入密钥查询余额，或点击"新建"</Typography>
                     </TableCell>
                   </TableRow>
-                ) : keys.map(k => (
+                ) : keys.map(k => {
+                  const usage = overview?.key_usage?.find(u => u.key === k.key)
+                  return (
                   <TableRow key={k.key} hover>
-                    <TableCell>
-                      <Typography sx={{ fontFamily: 'monospace', fontSize: 14 }}>{k.key}</Typography>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={k.key} placement="top">
+                        <Typography sx={{ fontFamily: 'monospace', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {k.key}
+                        </Typography>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       <Typography sx={{
@@ -378,6 +343,12 @@ export default function Billing() {
                       </Typography>
                     </TableCell>
                     <TableCell>
+                      <Typography sx={{ fontWeight: 600 }}>{usage ? usage.credits.toFixed(3) : '-'}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography sx={{ fontWeight: 600 }}>{usage ? formatNum(usage.tokens) : '-'}</Typography>
+                    </TableCell>
+                    <TableCell>
                       <Typography sx={{
                         fontWeight: 600,
                         color: k.level != null && k.level !== -1 ? 'info.main' : 'text.secondary'
@@ -385,7 +356,7 @@ export default function Billing() {
                         {k.level != null && k.level !== -1 ? `Lv.${k.level}` : '无限制'}
                       </Typography>
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell>
                       <Tooltip title="设置等级">
                         <IconButton size="small" onClick={() => { setLevelDialog(k); setLevelForm(k.level ?? 0) }}>
                           <LevelIcon fontSize="small" />
@@ -405,8 +376,8 @@ export default function Billing() {
                         </IconButton>
                       </Tooltip>
                     </TableCell>
-                  </TableRow>
-                ))}
+                  </TableRow>)
+                })}
               </TableBody>
             </Table>
           </TableContainer>

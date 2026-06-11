@@ -9,7 +9,7 @@ import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
   Psychology as ModelIcon, AccountBalance as BillingIcon,
   Settings as ConfigIcon, Menu as MenuIcon, VpnKey as TokenIcon,
-  History as RequestsIcon, MonetizationOn as MonetizationOnIcon,
+  History as RequestsIcon,
   LightMode, DarkMode, SettingsBrightness,
   Visibility, VisibilityOff,
 } from '@mui/icons-material'
@@ -27,7 +27,6 @@ import Dashboard from './pages/Dashboard'
 import Upstreams from './pages/Upstreams'
 import Models from './pages/Models'
 import Billing from './pages/Billing'
-import ModelCosts from './pages/ModelCosts'
 import Config from './pages/Config'
 import Requests from './pages/Requests'
 import NotFound from './pages/NotFound'
@@ -36,8 +35,7 @@ const NAV_ITEMS = [
   { path: '/dashboard', label: '仪表盘', icon: <DashboardIcon /> },
   { path: '/requests', label: '请求历史', icon: <RequestsIcon /> },
   { path: '/upstreams', label: '上游管理', icon: <UpstreamIcon /> },
-  { path: '/models', label: '模型路由', icon: <ModelIcon /> },
-  { path: '/model-costs', label: '模型倍率', icon: <MonetizationOnIcon /> },
+  { path: '/models', label: '模型管理', icon: <ModelIcon /> },
   { path: '/billing', label: '计费密钥', icon: <BillingIcon /> },
   { path: '/config', label: '系统配置', icon: <ConfigIcon /> },
 ]
@@ -158,7 +156,6 @@ export default function App() {
           <Route path="/upstreams" element={<Upstreams />} />
           <Route path="/models" element={<Models />} />
           <Route path="/billing" element={<Billing />} />
-          <Route path="/model-costs" element={<ModelCosts />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/config" element={<Config />} />
           <Route path="*" element={<NotFound />} />

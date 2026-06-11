@@ -48,6 +48,7 @@ interface RequestItem {
   latency_ms: number
   upstream_id: string | null
   billing_key?: string | null
+  is_stream?: boolean
   prompt_tokens: number | null
   completion_tokens: number | null
   thought_tokens?: number | null
@@ -210,7 +211,12 @@ export default function Requests() {
                   <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
                     <TableCell>{new Date(r.ts_ms).toLocaleTimeString()}</TableCell>
                     <TableCell>{r.client_ip ?? '-'}</TableCell>
-                    <TableCell>{r.model ?? '-'}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                        {r.model ?? '-'}
+                        {r.is_stream && <Chip size="small" label="流" color="info" variant="outlined" sx={{ height: 18, fontSize: 10 }} />}
+                      </Box>
+                    </TableCell>
                     <TableCell>
                       <Chip size="small" label={r.status} color={statusColor(r.status) as any} variant="outlined" />
                     </TableCell>
@@ -278,13 +284,23 @@ export default function Requests() {
                   </TableRow>
                   <TableRow>
                     <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>方法</TableCell>
-                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}><MethodChip method={selected.method} /></TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                        <MethodChip method={selected.method} />
+                        {selected.is_stream && <Chip size="small" label="流" color="info" variant="outlined" sx={{ height: 18, fontSize: 10 }} />}
+                      </Box>
+                    </TableCell>
                     <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>路径</TableCell>
                     <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider', wordBreak: 'break-all' }}>{selected.path}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell sx={{ color: 'text.secondary' }}>模型</TableCell>
-                    <TableCell>{selected.model ?? '-'}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                        {selected.model ?? '-'}
+                        {selected.is_stream && <Chip size="small" label="流" color="info" variant="outlined" sx={{ height: 18, fontSize: 10 }} />}
+                      </Box>
+                    </TableCell>
                     <TableCell sx={{ color: 'text.secondary' }}>请求大小</TableCell>
                     <TableCell>{formatBytes(selected.req_bytes)}</TableCell>
                   </TableRow>

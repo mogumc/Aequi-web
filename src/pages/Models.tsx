@@ -3,12 +3,21 @@ import {
   Card, CardContent, Typography, Box, Button, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Alert,
   Snackbar, Chip, Select, MenuItem, FormControl,
-  InputLabel, Checkbox, Divider,
+  InputLabel, Checkbox, Divider, IconButton, Tooltip,
+  TextField, Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material'
 import {
-  Refresh as RefreshIcon, Save as SaveIcon,
+  Refresh as RefreshIcon, Save as SaveIcon, Add as AddIcon,
+  Delete as DeleteIcon, Edit as EditIcon,
 } from '@mui/icons-material'
 import { api, ModelRoutesResponse, Upstream } from '../api/client'
+import type { ModelCosts as ModelCostsType } from '../api/client'
+
+interface CostEntry {
+  model: string
+  input: number
+  output: number
+}
 
 export default function Models() {
   const [routes, setRoutes] = useState<ModelRoutesResponse | null>(null)
@@ -36,7 +45,7 @@ export default function Models() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadCosts() }, [])
 
   // 从上游刷新模型列表
   const refreshModels = async () => {
@@ -111,6 +120,55 @@ export default function Models() {
     setCheckedModels(prev =>
       prev.includes(model) ? prev.filter(m => m !== model) : [...prev, model]
     )
+  }
+
+  // 模型倍率
+  const [costs, setCosts] = useState<CostEntry[]>([])
+  const [costsLoading, setCostsLoading] = useState(false)
+  const [costDialog, setCostDialog] = useState(false)
+  const [costEditing, setCostEditing] = useState<number | null>(null)
+  const [costForm, setCostForm] = useState<CostEntry>({ model: '', input: 0, output: 0 })
+
+  const loadCosts = async () => {
+    setCostsLoading(true)
+    try {
+      const data = await api.getModelCosts()
+      const entries: CostEntry[] = []
+      if (data && typeof data === 'object') {
+        for (const [model, c] of Object.entries(data)) {
+          if (c && typeof c === 'object') entries.push({ model, input: c.input ?? 0, output: c.output ?? 0 })
+        }
+      }
+      setCosts(entries)
+    } catch { /* ignore */ }
+    setCostsLoading(false)
+  }
+
+  const openAddCost = () => { setCostEditing(null); setCostForm({ model: '', input: 0, output: 0 }); setCostDialog(true) }
+  const openEditCost = (i: number) => { setCostEditing(i); setCostForm({ ...costs[i] }); setCostDialog(true) }
+
+  const handleSaveCost = async () => {
+    if (!costForm.model.trim()) { setError('请输入模型名称'); return }
+    const newCosts = costEditing !== null ? costs.map((c, i) => i === costEditing ? { ...costForm } : c) : [...costs, { ...costForm }]
+    const payload: ModelCostsType = {}
+    for (const entry of newCosts) payload[entry.model] = { input: entry.input, output: entry.output }
+    try {
+      await api.setModelCosts(payload)
+      setSnack('模型倍率已保存')
+      setCostDialog(false)
+      loadCosts()
+    } catch (e: any) { setError(e?.message ?? '保存失败') }
+  }
+
+  const handleDeleteCost = async (i: number) => {
+    const newCosts = costs.filter((_, idx) => idx !== i)
+    const payload: ModelCostsType = {}
+    for (const entry of newCosts) payload[entry.model] = { input: entry.input, output: entry.output }
+    try {
+      await api.setModelCosts(payload)
+      setSnack('已删除')
+      loadCosts()
+    } catch (e: any) { setError(e?.message ?? '删除失败') }
   }
 
   // 切换上游时重置模型列表
@@ -284,6 +342,75 @@ export default function Models() {
           )}
         </CardContent>
       </Card>
+
+      {/* 模型倍率 */}
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">模型倍率</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button startIcon={<RefreshIcon />} onClick={loadCosts} disabled={costsLoading}>刷新</Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCost}>新增</Button>
+            </Box>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            设置每个模型的输入/输出倍率，用于余额计算
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>模型名称</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>输入倍率</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>输出倍率</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="right">操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {costs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      <Typography sx={{ color: 'text.secondary', py: 4 }}>暂无模型倍率配置</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : costs.map((c, i) => (
+                  <TableRow key={c.model} hover>
+                    <TableCell><Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{c.model}</Typography></TableCell>
+                    <TableCell>{c.input}</TableCell>
+                    <TableCell>{c.output}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="编辑"><IconButton size="small" onClick={() => openEditCost(i)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="删除"><IconButton size="small" color="error" onClick={() => handleDeleteCost(i)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* 倍率编辑弹窗 */}
+      <Dialog open={costDialog} onClose={() => setCostDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{costEditing !== null ? '编辑倍率' : '新增倍率'}</DialogTitle>
+        <DialogContent sx={{ pt: '16px !important' }}>
+          <TextField fullWidth label="模型名称" value={costForm.model}
+            onChange={e => setCostForm(f => ({ ...f, model: e.target.value }))}
+            placeholder="gpt-4o" sx={{ mb: 2 }} disabled={costEditing !== null} helperText="唯一标识" />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField fullWidth label="输入倍率" type="number" value={costForm.input}
+              slotProps={{ htmlInput: { min: 0, step: '0.1' } }}
+              onChange={e => setCostForm(f => ({ ...f, input: Number(e.target.value) || 0 }))} />
+            <TextField fullWidth label="输出倍率" type="number" value={costForm.output}
+              slotProps={{ htmlInput: { min: 0, step: '0.1' } }}
+              onChange={e => setCostForm(f => ({ ...f, output: Number(e.target.value) || 0 }))} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCostDialog(false)}>取消</Button>
+          <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveCost} disabled={!costForm.model.trim()}>保存</Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={!!snack} autoHideDuration={3000} onClose={() => setSnack('')} message={snack} />
     </Box>
