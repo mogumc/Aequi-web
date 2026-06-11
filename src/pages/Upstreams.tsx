@@ -229,8 +229,12 @@ export default function Upstreams() {
                 ) : upstreams.map(u => (
                   <TableRow key={u.id} hover>
                     <TableCell><Typography sx={{ fontWeight: 600 }}>{u.id}</Typography></TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{u.base_url}</Typography>
+                    <TableCell sx={{ maxWidth: 300 }}>
+                      <Tooltip title={u.base_url} placement="top">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.base_url}
+                        </Typography>
+                      </Tooltip>
                     </TableCell>
                     <TableCell><Chip size="small" label={u.format} /></TableCell>
                     <TableCell>{u.weight}</TableCell>
