@@ -143,39 +143,42 @@ export default function Requests() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="h6">请求历史</Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <TextField
-                size="small" placeholder="搜索客户端IP/模型/上游/路径…"
-                value={filterText} onChange={e => setFilterText(e.target.value)}
-                slotProps={{
-                  input: {
-                    startAdornment: <SearchIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: 20 }} />,
-                  },
-                }}
-                sx={{ minWidth: 220 }}
-              />
-              <FormControl size="small" sx={{ minWidth: 90 }}>
-                <InputLabel>条数</InputLabel>
-                <Select
-                  label="条数"
-                  value={limit}
-                  onChange={e => { const v = Number(e.target.value); setLimit(v); load(v) }}
-                >
-                  <MenuItem value={50}>50</MenuItem>
-                  <MenuItem value={100}>100</MenuItem>
-                  <MenuItem value={200}>200</MenuItem>
-                  <MenuItem value={500}>500</MenuItem>
-                  <MenuItem value={1000}>1000</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControlLabel
-                control={<Switch size="small" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />}
-                label="自动刷新"
-              />
-              <Button startIcon={<RefreshIcon />} onClick={() => load()} disabled={loading}>刷新</Button>
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+              <Button size="small" startIcon={<RefreshIcon />} onClick={() => load()} disabled={loading}>刷新</Button>
             </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 2 }}>
+            <TextField
+              size="small" placeholder="搜索客户端IP/模型/上游/路径…"
+              value={filterText} onChange={e => setFilterText(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: <SearchIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: 20 }} />,
+                },
+              }}
+              sx={{ minWidth: 200, flex: '1 1 200px' }}
+            />
+            <FormControl size="small" sx={{ minWidth: 80 }}>
+              <InputLabel>条数</InputLabel>
+              <Select
+                label="条数"
+                value={limit}
+                onChange={e => { const v = Number(e.target.value); setLimit(v); load(v) }}
+              >
+                <MenuItem value={50}>50</MenuItem>
+                <MenuItem value={100}>100</MenuItem>
+                <MenuItem value={200}>200</MenuItem>
+                <MenuItem value={500}>500</MenuItem>
+                <MenuItem value={1000}>1000</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={<Switch size="small" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />}
+              label="自动刷新"
+              sx={{ ml: 0 }}
+            />
           </Box>
 
           <TableContainer sx={{ maxHeight: 500 }}>
