@@ -16,6 +16,14 @@ import {
 } from '@mui/icons-material'
 import { useThemeMode } from './contexts/ThemeModeContext'
 import { setAdminToken, getAdminToken } from './api/client'
+
+// 隐藏浏览器原生的密码可见切换按钮，避免与自定义图标重复
+const hideNativeToggle = `
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
+`
 import Dashboard from './pages/Dashboard'
 import Upstreams from './pages/Upstreams'
 import Models from './pages/Models'
@@ -115,6 +123,8 @@ export default function App() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {/* 隐藏浏览器原生的密码可见按钮 */}
+      <style>{hideNativeToggle}</style>
       {/* App Bar */}
       <AppBar position="fixed" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar>
