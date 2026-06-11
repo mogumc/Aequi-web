@@ -4,6 +4,7 @@ import {
   AppBar, Toolbar, Typography, Drawer, List, ListItemButton, ListItemIcon,
   ListItemText, Box, IconButton, Tooltip, Dialog, TextField, DialogTitle,
   DialogContent, DialogActions, Button, Chip, useMediaQuery, useTheme,
+  InputAdornment,
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
@@ -11,6 +12,7 @@ import {
   Settings as ConfigIcon, Menu as MenuIcon, VpnKey as TokenIcon,
   History as RequestsIcon,
   LightMode, DarkMode, SettingsBrightness,
+  Visibility, VisibilityOff,
 } from '@mui/icons-material'
 import { useThemeMode } from './contexts/ThemeModeContext'
 import { setAdminToken, getAdminToken } from './api/client'
@@ -54,6 +56,7 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [tokenDialog, setTokenDialog] = useState(false)
   const [tokenInput, setTokenInput] = useState(getAdminToken())
+  const [showToken, setShowToken] = useState(false)
 
   // 未配置 token 时自动弹出配置窗口
   useEffect(() => {
@@ -157,9 +160,21 @@ export default function App() {
         <DialogContent>
           <TextField
             autoFocus fullWidth margin="dense" label="X-Admin-Token"
+            type={showToken ? 'text' : 'password'}
             value={tokenInput} onChange={e => setTokenInput(e.target.value)}
             placeholder="输入管理员 Token"
             helperText="所有管理 API 需要此 Token 进行认证"
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowToken(!showToken)} edge="end" size="small">
+                      {showToken ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
         </DialogContent>
         <DialogActions>
