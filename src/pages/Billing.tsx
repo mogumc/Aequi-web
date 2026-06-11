@@ -7,6 +7,16 @@ import {
 import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Casino as GenerateIcon, Refresh as RefreshIcon, TrendingUp as LevelIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import { api, BillingKey, type BillingOverview } from '../api/client'
 
+function formatNum(n: number): string {
+  if (n === 0) return '0'
+  const units = ['', 'K', 'M', 'G', 'T']
+  const k = 1000
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(k)), units.length - 1)
+  const val = n / Math.pow(k, i)
+  if (i === 0) return val.toFixed(0)
+  return val.toFixed(3).replace(/\.?0+$/, '') + units[i]
+}
+
 function generateKey(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const arr = new Uint8Array(48)
@@ -140,140 +150,177 @@ export default function Billing() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
       {/* Overview */}
-      {overview && (
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">费用概览</Typography>
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">费用概览</Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              请求 {overview?.requests_total ?? '-'} | 进行中 {overview?.requests_inflight ?? '-'}
+            </Typography>
             <Button size="small" startIcon={<RefreshIcon />} onClick={() => { loadKeys(); reloadOverview() }}>刷新</Button>
           </Box>
-          {/* Stat cards */}
-          <Grid container spacing={1.5} sx={{ mb: 2 }}>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">总密钥</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_keys}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">活跃</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.active_keys}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">无限额度</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.unlimited_keys}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">耗尽</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.exhausted_keys}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">总余额</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_balance.toLocaleString()}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">请求</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                    {overview.requests_total}
-                    <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>
-                      进行中 {overview.requests_inflight}
-                    </Typography>
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Model costs */}
-          {overview.model_costs.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    模型倍率
-                    <Chip size="small" label={overview.model_costs.length} color="primary" variant="outlined" />
-                  </Typography>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ py: 0.5 }}>模型</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">输入倍率</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">输出倍率</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {overview.model_costs.map(m => (
-                        <TableRow key={m.model}>
-                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 13 }}>{m.model}</TableCell>
-                          <TableCell sx={{ py: 0.5 }} align="right">{m.input}</TableCell>
-                          <TableCell sx={{ py: 0.5 }} align="right">{m.output}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </Box>
-          )}
-
-          {/* Upstreams */}
-          {overview.upstreams.length > 0 && (
-            <Box>
-              <Card>
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    上游概览
-                    <Chip size="small" label={overview.upstreams.length} color="primary" variant="outlined" />
-                  </Typography>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ py: 0.5 }}>上游</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">密钥</TableCell>
-                        <TableCell sx={{ py: 0.5 }}>最低等级</TableCell>
-                        <TableCell sx={{ py: 0.5 }}>重定向</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {overview.upstreams.map(u => (
-                        <TableRow key={u.id}>
-                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{u.id}</TableCell>
-                          <TableCell sx={{ py: 0.5 }} align="right">{u.active_keys}/{u.total_keys}</TableCell>
-                          <TableCell sx={{ py: 0.5 }}>
-                            <Chip size="small" label={u.min_key_level > 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
-                          </TableCell>
-                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>
-                            {u.model_map.length > 0 ? JSON.stringify(u.model_map) : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </Box>
-          )}
         </Box>
-      )}
+        {/* Stat cards */}
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">总密钥</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview?.billing?.total_keys ?? '-'}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">活跃</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview?.billing?.active_keys ?? '-'}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">无限额度</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview?.billing?.unlimited_keys ?? '-'}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">耗尽</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview?.billing?.exhausted_keys ?? '-'}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">余额</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 1, overflow: 'hidden' }}>
+                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {overview?.billing?.total_balance?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 }) ?? '-'}
+                  </Box>
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400, flexShrink: 0 }}>
+                    已用 {overview?.usage?.credits?.toFixed(6) ?? '-'}
+                  </Typography>
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="caption" color="text.secondary">词元</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview?.usage?.tokens != null ? formatNum(overview.usage.tokens) : '-'}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Key usage */}
+        {overview && overview.key_usage && overview.key_usage.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  密钥用量
+                  <Chip size="small" label={overview.key_usage.length} color="primary" variant="outlined" />
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ py: 0.5 }}>密钥</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">Token</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">积分</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {overview.key_usage.map(k => (
+                      <TableRow key={k.key}>
+                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>{k.key.length > 20 ? `${k.key.slice(0, 10)}...${k.key.slice(-6)}` : k.key}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{formatNum(k.tokens)}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{k.credits.toFixed(6)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+
+        {/* Model costs */}
+        {overview && overview.model_costs.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  模型倍率
+                  <Chip size="small" label={overview.model_costs.length} color="primary" variant="outlined" />
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ py: 0.5 }}>模型</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">输入倍率</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">输出倍率</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {overview.model_costs.map(m => (
+                      <TableRow key={m.model}>
+                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 13 }}>{m.model}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.input}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.output}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+
+        {/* Upstreams */}
+        {overview && overview.upstreams.length > 0 && (
+          <Box>
+            <Card>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  上游概览
+                  <Chip size="small" label={overview.upstreams.length} color="primary" variant="outlined" />
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ py: 0.5 }}>上游</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">密钥</TableCell>
+                      <TableCell sx={{ py: 0.5 }}>最低等级</TableCell>
+                      <TableCell sx={{ py: 0.5 }}>重定向</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {overview.upstreams.map(u => (
+                      <TableRow key={u.id}>
+                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{u.id}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{u.active_keys}/{u.total_keys}</TableCell>
+                        <TableCell sx={{ py: 0.5 }}>
+                          <Chip size="small" label={u.min_key_level > 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
+                        </TableCell>
+                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>
+                          {u.model_map.length > 0 ? JSON.stringify(u.model_map) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </Box>
+        )}
+      </Box>
 
       {/* Query Section */}
       <Card sx={{ mb: 3 }}>

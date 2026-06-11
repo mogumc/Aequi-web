@@ -74,6 +74,8 @@ export default function Requests() {
   const [showRaw, setShowRaw] = useState(false)
   const [limit, setLimit] = useState(200)
   const [filterText, setFilterText] = useState('')
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [historyEnd, setHistoryEnd] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = async (reqLimit?: number) => {
@@ -83,10 +85,29 @@ export default function Requests() {
       const res = await api.getRequests(n)
       const list = Array.isArray(res?.requests) ? res.requests : []
       setRequests(list as RequestItem[])
+      setHistoryEnd(false)
     } catch (e: any) {
       setError(e?.message ?? '加载失败')
     }
     setLoading(false)
+  }
+
+  const loadMore = async () => {
+    if (loadingMore || requests.length === 0) return
+    const oldest = requests[requests.length - 1]
+    setLoadingMore(true)
+    try {
+      const res = await api.getRequestHistory(limit, oldest.ts_ms)
+      const list = Array.isArray(res?.requests) ? res.requests : []
+      if (list.length === 0) {
+        setHistoryEnd(true)
+      } else {
+        setRequests(prev => [...prev, ...list as RequestItem[]])
+      }
+    } catch (e: any) {
+      setError(e?.message ?? '加载历史失败')
+    }
+    setLoadingMore(false)
   }
 
   useEffect(() => { load() }, [])
@@ -202,9 +223,15 @@ export default function Requests() {
             </Table>
           </TableContainer>
 
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            共 {filteredRequests.length} / {requests.length} 条记录 | 点击行查看详情
-          </Typography>
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              共 {filteredRequests.length} / {requests.length} 条记录 | 点击行查看详情
+            </Typography>
+            <Button size="small" onClick={loadMore} disabled={loadingMore || historyEnd || !!filterText}
+              sx={{ textTransform: 'none' }}>
+              {loadingMore ? '加载中...' : historyEnd ? '已加载全部' : '加载更多'}
+            </Button>
+          </Box>
         </CardContent>
       </Card>
 

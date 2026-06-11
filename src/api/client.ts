@@ -157,6 +157,15 @@ export interface BillingOverview {
     total_balance: number
   }
   model_costs: { model: string; input: number; output: number }[]
+  usage: {
+    tokens: number
+    credits: number
+  }
+  key_usage: {
+    key: string
+    tokens: number
+    credits: number
+  }[]
   upstreams: {
     id: string
     total_keys: number
@@ -181,6 +190,8 @@ export const api = {
     request<MetricsResponse>(`/metrics?window=${window}`),
   getRequests: (limit = 50) =>
     request<{ count: number; now_ms: number; requests: unknown[] }>(`/requests?limit=${limit}`),
+  getRequestHistory: (limit: number, before: number) =>
+    request<{ count: number; now_ms: number; source: string; requests: unknown[] }>(`/requests/history?limit=${limit}&before=${before}`),
   getConfig: () => request<Config>('/config'),
 
   // Upstreams

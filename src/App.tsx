@@ -58,7 +58,7 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const { mode: themeMode, cycleMode } = useThemeMode()
-  const [drawerOpen, setDrawerOpen] = useState(true)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [tokenDialog, setTokenDialog] = useState(false)
   const [tokenInput, setTokenInput] = useState(getAdminToken())
   const [showToken, setShowToken] = useState(false)
@@ -145,7 +145,8 @@ export default function App() {
       </AppBar>
 
       {/* Sidebar */}
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}
+        slotProps={{ paper: { sx: { width: 280 } } }}>
         {drawer}
       </Drawer>
 
