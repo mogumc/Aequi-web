@@ -2,14 +2,13 @@ import { useEffect, useState, useRef } from 'react'
 import {
   Card, CardContent, Typography, Box, Button, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Alert, Snackbar,
-  Chip, Tooltip, IconButton, TextField, Switch, FormControlLabel,
-  Divider, Grid,
+  Chip, Switch, FormControlLabel, Divider, Grid,
 } from '@mui/material'
 import {
-  Refresh as RefreshIcon, Stop as StopIcon, PlayArrow as PlayIcon,
+  Refresh as RefreshIcon,
   Code as CodeIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material'
-import { api, getAdminToken } from '../api/client'
+import { api } from '../api/client'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -87,11 +86,7 @@ export default function Requests() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [selected, setSelected] = useState<RequestItem | null>(null)
   const [showRaw, setShowRaw] = useState(false)
-  const [streamStatus, setStreamStatus] = useState<'disconnected' | 'connecting' | 'streaming'>('disconnected')
-  const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isConnectingRef = useRef(false)
-  const streamingRef = useRef(false)
 
   const load = async () => {
     setLoading(true)
@@ -115,82 +110,6 @@ export default function Requests() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [autoRefresh])
 
-  const startStream = async () => {
-    // 防止重复连接
-    if (isConnectingRef.current || streamingRef.current) return
-
-    // 先终止已有连接
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
-
-    // 实时流与自动刷新互斥，启用实时流时关闭自动刷新
-    if (autoRefresh) {
-      setAutoRefresh(false)
-    }
-
-    isConnectingRef.current = true
-    setStreamStatus('connecting')
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    const token = getAdminToken()
-
-    try {
-      const res = await fetch('/admin/api/v1/requests/stream', {
-        headers: token ? { 'X-Admin-Token': token } : {},
-        signal: controller.signal,
-      })
-      if (!res.ok || !res.body) throw new Error(`Stream ${res.status}`)
-
-      streamingRef.current = true
-      setStreamStatus('streaming')
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done || controller.signal.aborted) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() || ''
-        for (const part of parts) {
-          const dataLine = part.split('\n').find(l => l.startsWith('data:'))
-          if (dataLine) {
-            try {
-              const item = JSON.parse(dataLine.slice(5).trim()) as RequestItem
-              setRequests(prev => [item, ...prev].slice(0, 200))
-            } catch {}
-          }
-        }
-      }
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        setError('实时流断开，3秒后自动重连…')
-        streamingRef.current = false
-        setStreamStatus('disconnected')
-        setTimeout(() => { if (!controller.signal.aborted) startStream() }, 3000)
-      }
-    } finally {
-      isConnectingRef.current = false
-      if (controller.signal.aborted) {
-        streamingRef.current = false
-        setStreamStatus('disconnected')
-      }
-    }
-  }
-
-  const stopStream = () => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    streamingRef.current = false
-    setStreamStatus('disconnected')
-    isConnectingRef.current = false
-  }
-
-  useEffect(() => () => { abortRef.current?.abort() }, [])
-
   const statusColor = (s: number) => s >= 200 && s < 300 ? 'success' : s >= 400 && s < 500 ? 'warning' : s >= 500 ? 'error' : 'default'
 
   const formatTokens = (r: RequestItem) => {
@@ -207,20 +126,11 @@ export default function Requests() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">请求历史</Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Tooltip title={streamStatus !== 'disconnected' ? '实时流运行中，自动刷新已禁用' : ''}>
-                <FormControlLabel
-                  control={<Switch size="small" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} disabled={streamStatus !== 'disconnected'} />}
-                  label="自动刷新"
-                />
-              </Tooltip>
+              <FormControlLabel
+                control={<Switch size="small" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />}
+                label="自动刷新"
+              />
               <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>刷新</Button>
-              {streamStatus === 'streaming' ? (
-                <Button color="warning" startIcon={<StopIcon />} onClick={stopStream}>停止实时</Button>
-              ) : streamStatus === 'connecting' ? (
-                <Button disabled startIcon={<RefreshIcon sx={{ animation: 'spin 1s linear infinite' }} />}>连接中…</Button>
-              ) : (
-                <Button variant="outlined" startIcon={<PlayIcon />} onClick={startStream}>实时流</Button>
-              )}
             </Box>
           </Box>
 
