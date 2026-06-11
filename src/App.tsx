@@ -4,7 +4,7 @@ import {
   AppBar, Toolbar, Typography, Drawer, List, ListItemButton, ListItemIcon,
   ListItemText, Box, IconButton, Tooltip, Dialog, TextField, DialogTitle,
   DialogContent, DialogActions, Button, Chip, useMediaQuery, useTheme,
-  InputAdornment,
+  InputAdornment, GlobalStyles,
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
@@ -127,6 +127,16 @@ export default function App() {
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {/* 隐藏浏览器原生的密码可见按钮 */}
       <style>{hideNativeToggle}</style>
+      <GlobalStyles styles={{
+        '*::-webkit-scrollbar': { width: 8, height: 8 },
+        '*::-webkit-scrollbar-track': { bgcolor: 'transparent' },
+        '*::-webkit-scrollbar-thumb': {
+          bgcolor: 'var(--mui-palette-divider)',
+          borderRadius: 4,
+          '&:hover': { bgcolor: 'var(--mui-palette-action-hover)' },
+        },
+        '*': { scrollbarWidth: 'thin', scrollbarColor: 'var(--mui-palette-divider) transparent' },
+      }} />
       {/* App Bar */}
       <AppBar position="fixed" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar>
