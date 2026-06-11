@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   Card, CardContent, Typography, Box, Button, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Alert, Snackbar,
-  Chip, Switch, FormControlLabel, Divider, Grid,
+  Chip, Switch, FormControlLabel,
   Select, MenuItem, InputLabel, FormControl, TextField,
 } from '@mui/material'
 import {
@@ -16,32 +16,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-function DetailLabel({ label, value, mono, highlight }: { label: string; value: React.ReactNode; mono?: boolean; highlight?: boolean }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>
-        {label}
-      </Typography>
-      {typeof value === 'string' || typeof value === 'number' ? (
-        <Typography
-          variant="body2"
-          sx={{
-            fontFamily: mono ? 'monospace' : undefined,
-            fontSize: mono ? 12 : undefined,
-            fontWeight: highlight ? 700 : 400,
-            color: highlight ? 'primary.main' : 'text.primary',
-            wordBreak: 'break-all',
-          }}
-        >
-          {value}
-        </Typography>
-      ) : (
-        <Box sx={{ mt: 0.25 }}>{value}</Box>
-      )}
-    </Box>
-  )
 }
 
 function MethodChip({ method }: { method: string }) {
@@ -73,11 +47,21 @@ interface RequestItem {
   status: number
   latency_ms: number
   upstream_id: string | null
+  billing_key?: string | null
   prompt_tokens: number | null
   completion_tokens: number | null
+  thought_tokens?: number | null
   total_tokens: number | null
   req_bytes: number
   resp_bytes: number
+  request_headers?: unknown
+  request_body?: unknown
+  timing?: {
+    queue_ms: number
+    upstream_ms: number
+    total_ms: number
+    attempts: number
+  }
 }
 
 export default function Requests() {
@@ -182,16 +166,16 @@ export default function Requests() {
           </Box>
 
           <TableContainer sx={{ maxHeight: 500 }}>
-            <Table size="small" stickyHeader>
+            <Table size="small" stickyHeader sx={{ '& td:not(:nth-of-type(4))': { fontFamily: 'monospace', fontSize: 13, fontWeight: 600 } }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>时间</TableCell>
-                  <TableCell>客户端</TableCell>
-                  <TableCell>模型</TableCell>
-                  <TableCell>状态</TableCell>
-                  <TableCell>延迟</TableCell>
-                  <TableCell>Token</TableCell>
-                  <TableCell>上游</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>时间</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>客户端</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>模型</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>状态</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>延迟</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Token</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>上游</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -203,23 +187,15 @@ export default function Requests() {
                   </TableRow>
                 ) : filteredRequests.map(r => (
                   <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
-                    <TableCell>
-                      <Typography variant="caption">{new Date(r.ts_ms).toLocaleTimeString()}</Typography>
-                    </TableCell>
-                    <TableCell><Typography sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.client_ip ?? '-'}</Typography></TableCell>
-                    <TableCell>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{r.model ?? '-'}</Typography>
-                    </TableCell>
+                    <TableCell>{new Date(r.ts_ms).toLocaleTimeString()}</TableCell>
+                    <TableCell>{r.client_ip ?? '-'}</TableCell>
+                    <TableCell>{r.model ?? '-'}</TableCell>
                     <TableCell>
                       <Chip size="small" label={r.status} color={statusColor(r.status) as any} variant="outlined" />
                     </TableCell>
                     <TableCell>{r.latency_ms ?? 0}ms</TableCell>
-                    <TableCell>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{formatTokens(r)}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption">{r.upstream_id ?? '-'}</Typography>
-                    </TableCell>
+                    <TableCell>{formatTokens(r)}</TableCell>
+                    <TableCell>{r.upstream_id ?? '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -253,120 +229,62 @@ export default function Requests() {
             </Box>
 
             {showRaw ? (
-              <Box
-                component="pre"
-                sx={{
-                  fontFamily: 'monospace', fontSize: 12,
-                  bgcolor: 'background.default', color: 'text.primary',
-                  p: 2, borderRadius: 1, overflow: 'auto', maxHeight: 400,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                  border: '1px solid', borderColor: 'divider',
-                }}
-              >
+              <Box component="pre" sx={{ fontFamily: 'monospace', fontSize: 12, bgcolor: 'background.default', color: 'text.primary', p: 2, borderRadius: 1, overflow: 'auto', maxHeight: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-all', border: '1px solid', borderColor: 'divider' }}>
                 {JSON.stringify(selected, null, 2)}
               </Box>
             ) : (
-              <Box>
-                {/* 基本信息 */}
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11 }}>
-                  基本信息
-                </Typography>
-                <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="请求 ID" value={`#${selected.id}`} />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="时间" value={new Date(selected.ts_ms).toLocaleString()} />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="客户端 IP" value={selected.client_ip ?? '-'} mono />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel
-                      label="状态码"
-                      value={
-                        <Chip
-                          size="small"
-                          label={selected.status}
-                          color={statusColor(selected.status) as any}
-                          variant="filled"
-                          sx={{ fontWeight: 700, minWidth: 48 }}
-                        />
-                      }
-                    />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* 请求信息 */}
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11 }}>
-                  请求信息
-                </Typography>
-                <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                  <Grid size={{ xs: 4, sm: 2 }}>
-                    <DetailLabel label="方法" value={<MethodChip method={selected.method} />} />
-                  </Grid>
-                  <Grid size={{ xs: 8, sm: 5 }}>
-                    <DetailLabel label="路径" value={selected.path} mono />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="模型" value={selected.model ?? '-'} mono />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 2 }}>
-                    <DetailLabel label="请求大小" value={formatBytes(selected.req_bytes)} />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* 响应信息 */}
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11 }}>
-                  响应信息
-                </Typography>
-                <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="延迟" value={`${selected.latency_ms ?? 0} ms`} highlight />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="响应大小" value={formatBytes(selected.resp_bytes)} />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="Prompt Tokens" value={selected.prompt_tokens != null ? selected.prompt_tokens.toLocaleString() : '-'} />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <DetailLabel label="Completion Tokens" value={selected.completion_tokens != null ? selected.completion_tokens.toLocaleString() : '-'} />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* 上游信息 */}
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11 }}>
-                  上游信息
-                </Typography>
-                <Grid container spacing={1.5}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <DetailLabel label="上游 ID" value={selected.upstream_id ?? '未路由'} mono />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <DetailLabel
-                      label="总 Tokens"
-                      value={
-                        selected.total_tokens != null ? (
-                          <Chip
-                            size="small"
-                            label={selected.total_tokens.toLocaleString()}
-                            color="primary"
-                            variant="outlined"
-                            sx={{ fontWeight: 600 }}
-                          />
-                        ) : '-'
-                      }
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
+              <Table size="small" sx={{ '& td': { border: 'none', py: 0.5, px: 1, fontFamily: 'monospace', fontSize: 13, fontWeight: 600 }, '& td:first-of-type': { color: 'text.secondary', fontWeight: 600 }, '& td:nth-of-type(3)': { color: 'text.secondary', fontWeight: 600 } }}>
+                <TableBody>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary', width: 140 }}>请求 ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>#{selected.id}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary', width: 100 }}>时间</TableCell>
+                    <TableCell>{new Date(selected.ts_ms).toLocaleString()}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary' }}>客户端 IP</TableCell>
+                    <TableCell>{selected.client_ip ?? '-'}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary' }}>状态码</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={selected.status} color={statusColor(selected.status) as any} variant="filled" sx={{ fontWeight: 700, minWidth: 48 }} />
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>方法</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}><MethodChip method={selected.method} /></TableCell>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>路径</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider', wordBreak: 'break-all' }}>{selected.path}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary' }}>模型</TableCell>
+                    <TableCell>{selected.model ?? '-'}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary' }}>请求大小</TableCell>
+                    <TableCell>{formatBytes(selected.req_bytes)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>延迟</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}>{selected.latency_ms ?? 0} ms</TableCell>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>响应大小</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}>{formatBytes(selected.resp_bytes)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary' }}>输入</TableCell>
+                    <TableCell>{selected.prompt_tokens != null ? `${selected.prompt_tokens.toLocaleString()} tokens` : '-'}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary' }}>输出</TableCell>
+                    <TableCell>{selected.completion_tokens != null ? `${selected.completion_tokens.toLocaleString()} tokens` : '-'}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>上游 ID</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}>{selected.upstream_id ?? '未路由'}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary', borderTop: '1px solid', borderColor: 'divider' }}>总 Tokens</TableCell>
+                    <TableCell sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                      {selected.total_tokens != null ? (
+                        <Chip size="small" label={selected.total_tokens.toLocaleString()} color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
+                      ) : '-'}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>

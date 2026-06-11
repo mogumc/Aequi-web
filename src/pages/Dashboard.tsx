@@ -6,7 +6,7 @@ import {
 } from '@mui/material'
 import {
   TrendingUp as TrendingUpIcon, Speed as SpeedIcon,
-  CheckCircle as CheckIcon, Error as ErrorIcon,
+  CheckCircle as CheckIcon,
   Timer as TimerIcon, Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import { api, Stats, MetricsBucket, getAdminToken } from '../api/client'
@@ -18,13 +18,13 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip, Legend)
 
-function StatCard({ title, value, icon, color, sub }: {
-  title: string; value: string | number; icon: React.ReactNode; color: string; sub?: string
+function StatCard({ title, value, icon, sub }: {
+  title: string; value: string | number; icon: React.ReactNode; sub?: string
 }) {
   return (
     <Card>
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: `${color}.light`, color: `${color}.dark`, display: 'flex' }}>
+        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', color: 'text.primary', display: 'flex' }}>
           {icon}
         </Box>
         <Box>
@@ -56,7 +56,7 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [buckets, setBuckets] = useState<MetricsBucket[]>([])
-  const [metricWindow, setMetricWindow] = useState<'minute' | 'hour' | 'day'>('hour')
+  const [metricWindow, setMetricWindow] = useState('1m')
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
@@ -130,23 +130,23 @@ export default function Dashboard() {
 
       {/* Stats Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="RPM" value={stats?.rpm?.toFixed(0) ?? '0'} icon={<SpeedIcon />} color="primary" sub="请求/分钟" />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="RPM" value={stats?.rpm?.toFixed(0) ?? '0'} icon={<SpeedIcon />} sub="请求/分钟" />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="总请求" value={(stats?.requests_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} color="success" sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行`} />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="成功率" value={`${successRate}%`} icon={<CheckIcon />} sub={`${stats?.responses_4xx ?? 0} 4xx / ${stats?.responses_5xx ?? 0} 5xx`} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="成功率" value={`${successRate}%`} icon={<CheckIcon />} color="info" sub={`${stats?.responses_4xx ?? 0} 4xx / ${stats?.responses_5xx ?? 0} 5xx`} />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="平均延迟" value={`${stats?.latency_avg_ms?.toFixed(0) ?? '0'}ms`} icon={<TimerIcon />} sub={`${totalErrors} 错误`} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="平均延迟" value={`${stats?.latency_avg_ms?.toFixed(0) ?? '0'}ms`} icon={<TimerIcon />} color="warning" sub={`${totalErrors} 错误`} />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="总请求" value={(stats?.requests_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行`} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="总 Token" value={(stats?.tokens_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} color="secondary" sub={`入 ${(stats?.prompt_tokens_total ?? 0).toLocaleString()} / 出 ${(stats?.completion_tokens_total ?? 0).toLocaleString()}`} />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="总 Token" value={(stats?.tokens_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} sub={`输入 ${(stats?.prompt_tokens_total ?? 0).toLocaleString()} / 输出 ${(stats?.completion_tokens_total ?? 0).toLocaleString()}`} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatCard title="进行中" value={stats?.requests_inflight ?? 0} icon={<TrendingUpIcon />} color="warning" sub={`队列 ${stats?.queue_depth ?? 0}`} />
+        <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+          <StatCard title="进行中" value={stats?.requests_inflight ?? 0} icon={<TrendingUpIcon />} sub={`队列 ${stats?.queue_depth ?? 0}`} />
         </Grid>
       </Grid>
 
@@ -215,10 +215,11 @@ export default function Dashboard() {
             <Typography variant="h6">请求趋势</Typography>
             <FormControl size="small" sx={{ minWidth: 120 }}>
               <InputLabel>时间窗口</InputLabel>
-              <Select value={metricWindow} label="时间窗口" onChange={e => setMetricWindow(e.target.value as any)}>
-                <MenuItem value="minute">1 分钟</MenuItem>
-                <MenuItem value="hour">1 小时</MenuItem>
-                <MenuItem value="day">1 天</MenuItem>
+              <Select value={metricWindow} label="时间窗口" onChange={e => { setMetricWindow(e.target.value); api.getMetrics(e.target.value).then(d => { if (mountedRef.current) setBuckets(d?.buckets ?? []) }).catch(() => {}) }}>
+                <MenuItem value="1m">1 分钟</MenuItem>
+                <MenuItem value="5m">5 分钟</MenuItem>
+                <MenuItem value="30m">30 分钟</MenuItem>
+                <MenuItem value="1h">1 小时</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -230,9 +231,7 @@ export default function Dashboard() {
                 data={{
                   labels: buckets.map(b => {
                     const d = new Date(b.ts_ms)
-                    if (metricWindow === 'day') return `${d.getMonth() + 1}/${d.getDate()}`
-                    if (metricWindow === 'hour') return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-                    return `${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`
+                    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
                   }),
                   datasets: [
                     {

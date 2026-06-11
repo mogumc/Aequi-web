@@ -3,8 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import {
   AppBar, Toolbar, Typography, Drawer, List, ListItemButton, ListItemIcon,
   ListItemText, Box, IconButton, Tooltip, Dialog, TextField, DialogTitle,
-  DialogContent, DialogActions, Button, Chip, useMediaQuery, useTheme,
-  InputAdornment, GlobalStyles,
+  DialogContent, DialogActions, Button, Chip, InputAdornment, GlobalStyles,
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
@@ -33,8 +32,6 @@ import Config from './pages/Config'
 import Requests from './pages/Requests'
 import NotFound from './pages/NotFound'
 
-const DRAWER_WIDTH = 240
-
 const NAV_ITEMS = [
   { path: '/dashboard', label: '仪表盘', icon: <DashboardIcon /> },
   { path: '/requests', label: '请求历史', icon: <RequestsIcon /> },
@@ -60,10 +57,8 @@ const THEME_MODE_ICONS: Record<string, React.ReactNode> = {
 export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
-  const muiTheme = useTheme()
   const { mode: themeMode, cycleMode } = useThemeMode()
-  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'))
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(true)
   const [tokenDialog, setTokenDialog] = useState(false)
   const [tokenInput, setTokenInput] = useState(getAdminToken())
   const [showToken, setShowToken] = useState(false)
@@ -97,7 +92,7 @@ export default function App() {
           <ListItemButton
             key={item.path}
             selected={location.pathname.startsWith(item.path)}
-            onClick={() => { navigate(item.path); if (isMobile) setMobileOpen(false) }}
+            onClick={() => { navigate(item.path); setDrawerOpen(false) }}
             sx={{ borderRadius: 2, mb: 0.5 }}
           >
             <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
@@ -140,11 +135,9 @@ export default function App() {
       {/* App Bar */}
       <AppBar position="fixed" elevation={0} sx={{ bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar>
-          {isMobile && (
-            <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1 }}>
-              <MenuIcon />
-            </IconButton>
-          )}
+          <IconButton edge="start" onClick={() => setDrawerOpen(!drawerOpen)} sx={{ mr: 1 }}>
+            <MenuIcon />
+          </IconButton>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             {currentNav.label}
           </Typography>
@@ -152,15 +145,9 @@ export default function App() {
       </AppBar>
 
       {/* Sidebar */}
-      {isMobile ? (
-        <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)}>
-          {drawer}
-        </Drawer>
-      ) : (
-        <Drawer variant="permanent" sx={{ width: DRAWER_WIDTH, flexShrink: 0, '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', position: 'sticky', top: '64px', height: 'calc(100vh - 64px)', borderRight: '1px solid', borderColor: 'divider' } }}>
-          {drawer}
-        </Drawer>
-      )}
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        {drawer}
+      </Drawer>
 
       {/* Main content */}
       <Box component="main" sx={{ flex: 1, mt: '64px', p: 3, overflow: 'auto' }}>

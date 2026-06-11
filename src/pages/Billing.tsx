@@ -21,22 +21,28 @@ export default function Billing() {
   const [error, setError] = useState('')
   const [createDialog, setCreateDialog] = useState(false)
   const [adjustDialog, setAdjustDialog] = useState<BillingKey | null>(null)
-  const [createForm, setCreateForm] = useState({ key: '', balance: 0, level: -1 })
+  const [createForm, setCreateForm] = useState({ key: '', balance: '' as string | number, level: '' as string | number })
   const [adjustDelta, setAdjustDelta] = useState(0.001)
   const [adjustMode, setAdjustMode] = useState<'add' | 'subtract'>('add')
   const [snack, setSnack] = useState('')
   const [overview, setOverview] = useState<BillingOverview | null>(null)
-  const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
-  const [levelForm, setLevelForm] = useState(-1)
-  const [deleteConfirm, setDeleteConfirm] = useState<BillingKey | null>(null)
 
-  useEffect(() => {
+  const loadKeys = () => {
     api.listBillingKeys().then(d => {
       setKeys(Array.isArray(d?.keys) ? d.keys : [])
     }).catch(() => {})
-    api.getBillingOverview().then(d => {
-      if (d && typeof d === 'object' && 'billing' in d) setOverview(d)
-    }).catch(() => {})
+  }
+
+  const reloadOverview = () => {
+    api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
+  }
+  const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
+  const [levelForm, setLevelForm] = useState(0)
+  const [deleteConfirm, setDeleteConfirm] = useState<BillingKey | null>(null)
+
+  useEffect(() => {
+    loadKeys()
+    reloadOverview()
   }, [])
 
   const handleQuery = async () => {
@@ -63,21 +69,16 @@ export default function Billing() {
   }
 
   const handleCreate = async () => {
-    if (createForm.balance < -1) {
-      setError('余额不能小于 -1')
-      return
-    }
     try {
-      const result = await api.createBillingKey(createForm.key, createForm.balance)
-      if (result && typeof result === 'object' && result.key) {
-        setKeys(prev => [result, ...prev])
-        // 设置等级
-        if (createForm.level !== -1) {
-          api.setBillingKeyLevel(createForm.key, createForm.level).catch(() => {})
-        }
+      const balance = createForm.balance === '' ? 0 : Number(createForm.balance)
+      await api.createBillingKey(createForm.key, balance)
+      if (createForm.level !== '' && createForm.level !== -1) {
+        await api.setBillingKeyLevel(createForm.key, Number(createForm.level)).catch(() => {})
       }
       setCreateDialog(false)
-      setCreateForm({ key: '', balance: 0, level: -1 })
+      setCreateForm({ key: '', balance: '', level: '' })
+      loadKeys()
+      reloadOverview()
       setSnack('计费密钥已创建')
     } catch (e: any) {
       setError(e?.message ?? '操作失败')
@@ -100,6 +101,7 @@ export default function Billing() {
       }
       setAdjustDialog(null)
       setAdjustDelta(0.001)
+      reloadOverview()
       setAdjustMode('add')
       setSnack(adjustMode === 'add' ? '余额已增加' : '余额已扣除')
     } catch (e: any) {
@@ -114,6 +116,7 @@ export default function Billing() {
       setKeys(prev => prev.filter(k => k.key !== deleteConfirm.key))
       setDeleteConfirm(null)
       setSnack('计费密钥已删除')
+      reloadOverview()
     } catch (e: any) {
       setError(e?.message ?? '删除失败')
     }
@@ -125,6 +128,8 @@ export default function Billing() {
       await api.setBillingKeyLevel(levelDialog.key, levelForm)
       setLevelDialog(null)
       setSnack(levelForm === -1 ? '已设为无限制' : `等级已设为 ${levelForm}`)
+      loadKeys()
+      reloadOverview()
     } catch (e: any) {
       setError(e?.message ?? '设置等级失败')
     }
@@ -139,58 +144,60 @@ export default function Billing() {
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">费用概览</Typography>
-            <Button size="small" startIcon={<RefreshIcon />} onClick={() =>
-              api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
-            }>刷新</Button>
+            <Button size="small" startIcon={<RefreshIcon />} onClick={() => { loadKeys(); reloadOverview() }}>刷新</Button>
           </Box>
           {/* Stat cards */}
           <Grid container spacing={1.5} sx={{ mb: 2 }}>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <Card sx={{ bgcolor: 'primary.light', color: 'primary.dark' }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+              <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>总密钥</Typography>
+                  <Typography variant="caption" color="text.secondary">总密钥</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_keys}</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <Card sx={{ bgcolor: 'success.light', color: 'success.dark' }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+              <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>活跃</Typography>
+                  <Typography variant="caption" color="text.secondary">活跃</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.active_keys}</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <Card sx={{ bgcolor: 'warning.light', color: 'warning.dark' }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+              <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>无限额度</Typography>
+                  <Typography variant="caption" color="text.secondary">无限额度</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.unlimited_keys}</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <Card sx={{ bgcolor: 'error.light', color: 'error.dark' }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+              <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>耗尽</Typography>
+                  <Typography variant="caption" color="text.secondary">耗尽</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.exhausted_keys}</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <Card sx={{ bgcolor: 'info.light', color: 'info.dark' }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
+              <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7 }}>总余额</Typography>
+                  <Typography variant="caption" color="text.secondary">总余额</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_balance.toLocaleString()}</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 4 }}>
               <Card>
                 <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                   <Typography variant="caption" color="text.secondary">请求</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.requests_total}</Typography>
-                  <Typography variant="caption" color="text.secondary">进行中 {overview.requests_inflight}</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                    {overview.requests_total}
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>
+                      进行中 {overview.requests_inflight}
+                    </Typography>
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -318,22 +325,22 @@ export default function Billing() {
                       <Typography sx={{
                         fontWeight: 600,
                         color: (k.balance ?? 0) < 0 && (k.balance ?? 0) !== -1 ? 'error'
-                          : (k.balance ?? 0) === -1 ? 'success' : 'inherit'
+                          : (k.balance ?? 0) === -1 ? 'text.secondary' : 'inherit'
                       }}>
                         {(k.balance ?? 0) === -1 ? '无限额度' : (k.balance ?? 0).toLocaleString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={k.level != null ? `Lv.${k.level}` : '无限制'}
-                        color={k.level != null ? 'info' : 'default'}
-                        variant="outlined"
-                      />
+                      <Typography sx={{
+                        fontWeight: 600,
+                        color: k.level != null && k.level !== -1 ? 'info.main' : 'text.secondary'
+                      }}>
+                        {k.level != null && k.level !== -1 ? `Lv.${k.level}` : '无限制'}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title="设置等级">
-                        <IconButton size="small" onClick={() => { setLevelDialog(k); setLevelForm(k.level ?? -1) }}>
+                        <IconButton size="small" onClick={() => { setLevelDialog(k); setLevelForm(k.level ?? 0) }}>
                           <LevelIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -362,66 +369,63 @@ export default function Billing() {
       {/* Create Dialog */}
       <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>创建计费密钥</DialogTitle>
-        <DialogContent sx={{ pt: '16px !important' }}>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <TextField fullWidth label="密钥" value={createForm.key} sx={{ flex: 1 }}
+        <DialogContent sx={{ pt: '16px !important', '& .field-row': { display: 'grid', gridTemplateColumns: '1fr 56px', gap: 1, mb: 2 } }}>
+          <Box className="field-row">
+            <TextField label="密钥" value={createForm.key}
               onChange={e => setCreateForm(f => ({ ...f, key: e.target.value }))}
               placeholder="hs-xxxx" />
             <Tooltip title="快速生成密钥">
               <Button variant="outlined" onClick={() => setCreateForm(f => ({ ...f, key: generateKey() }))}
-                sx={{ minWidth: 48, height: 40, mt: '8px' }}>
+                sx={{ width: 56, height: 56, p: 0, minWidth: 56 }}>
                 <GenerateIcon />
               </Button>
             </Tooltip>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-            <TextField fullWidth label="初始余额" type="number"
-              slotProps={{ htmlInput: { min: 0, step: '0.001' } }}
+          <Box className="field-row">
+            <TextField label="初始余额" type="number"
+              slotProps={{ htmlInput: { step: 0.001 } }}
+              sx={{ '& input[type=number]::-webkit-outer-spin-button,& input[type=number]::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
               value={createForm.balance === -1 ? '' : createForm.balance}
-              onChange={e => setCreateForm(f => ({ ...f, balance: Math.max(0, Number(e.target.value) || 0) }))}
+              onChange={e => setCreateForm(f => ({ ...f, balance: e.target.value }))}
               disabled={createForm.balance === -1}
-              placeholder={createForm.balance === -1 ? '无限额度' : ''}
-              helperText={createForm.balance === -1 ? '无限额度（-1）' : '点击右侧按钮开启无限额度'}
-              error={createForm.balance < -1} />
+              placeholder={createForm.balance === -1 ? '无限额度' : ''} />
             <Tooltip title={createForm.balance === -1 ? '取消无限额度' : '开启无限额度'}>
               <Button
                 variant={createForm.balance === -1 ? 'contained' : 'outlined'}
-                color={createForm.balance === -1 ? 'success' : 'primary'}
-                onClick={() => setCreateForm(f => ({ ...f, balance: f.balance === -1 ? 0 : -1 }))}
-                sx={{ minWidth: 48, height: 40, mt: '8px' }}
+                color={createForm.balance === -1 ? 'success' : 'inherit'}
+                onClick={() => setCreateForm(f => ({ ...f, balance: f.balance === -1 ? '' : -1 }))}
+                sx={{ width: 56, height: 56, p: 0, minWidth: 56 }}
               >
                 ∞
               </Button>
             </Tooltip>
           </Box>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>密钥等级</Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => (
-                <Button key={l} size="small"
-                  variant={createForm.level === l ? 'contained' : 'outlined'}
-                  color={createForm.level === l ? 'info' : 'inherit'}
-                  onClick={() => setCreateForm(f => ({ ...f, level: l }))}
-                  sx={{ minWidth: 40 }}
-                >
-                  {l}
-                </Button>
-              ))}
-              <Button size="small"
+          <Box className="field-row" sx={{ mb: '0 !important' }}>
+            <TextField label="密钥等级" type="text" inputMode="numeric" value={createForm.level === -1 ? '' : createForm.level}
+              onChange={e => {
+                const v = e.target.value
+                if (v === '') { setCreateForm(f => ({ ...f, level: '' })); return }
+                const n = parseInt(v, 10)
+                if (!isNaN(n) && n >= 0 && n <= 10) setCreateForm(f => ({ ...f, level: n }))
+              }}
+              disabled={createForm.level === -1}
+              placeholder={createForm.level === -1 ? '无限制' : ''} />
+            <Tooltip title={createForm.level === -1 ? '取消无限制' : '开启无限制'}>
+              <Button
                 variant={createForm.level === -1 ? 'contained' : 'outlined'}
                 color={createForm.level === -1 ? 'success' : 'inherit'}
-                onClick={() => setCreateForm(f => ({ ...f, level: -1 }))}
-                sx={{ minWidth: 40 }}
+                onClick={() => setCreateForm(f => ({ ...f, level: f.level === -1 ? '' : -1 }))}
+                sx={{ width: 56, height: 56, p: 0, minWidth: 56 }}
               >
-                无限制
+                ∞
               </Button>
-            </Box>
+            </Tooltip>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialog(false)}>取消</Button>
           <Button variant="contained" onClick={handleCreate}
-            disabled={!createForm.key}>创建</Button>
+            disabled={!createForm.key || createForm.balance === '' || createForm.level === ''}>创建</Button>
         </DialogActions>
       </Dialog>
 
@@ -465,32 +469,33 @@ export default function Billing() {
       </Dialog>
 
       {/* Level Dialog */}
-      <Dialog open={!!levelDialog} onClose={() => setLevelDialog(null)} maxWidth="xs" fullWidth>
+      <Dialog open={!!levelDialog} onClose={() => setLevelDialog(null)} maxWidth="sm" fullWidth>
         <DialogTitle>设置密钥等级</DialogTitle>
         <DialogContent sx={{ pt: '16px !important' }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            密钥: <strong>{levelDialog?.key}</strong>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontFamily: 'monospace', fontSize: 13 }}>
+            {levelDialog?.key}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => (
-              <Button key={l} size="small"
-                variant={levelForm === l ? 'contained' : 'outlined'}
-                color={levelForm === l ? 'info' : 'inherit'}
-                onClick={() => setLevelForm(l)}
-                sx={{ minWidth: 40 }}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+            <TextField fullWidth label="等级" type="text" inputMode="numeric" value={levelForm === -1 ? '' : levelForm}
+              sx={{ flex: 1 }}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10)
+                if (e.target.value === '') { setLevelForm(-1); return }
+                if (!isNaN(v) && v >= 0 && v <= 10) setLevelForm(v)
+              }}
+              disabled={levelForm === -1}
+              placeholder={levelForm === -1 ? '无限制' : ''} />
+            <Tooltip title={levelForm === -1 ? '取消无限制' : '开启无限制'}>
+              <Button
+                variant={levelForm === -1 ? 'contained' : 'outlined'}
+                color={levelForm === -1 ? 'success' : 'inherit'}
+                onClick={() => setLevelForm(levelForm === -1 ? 0 : -1)}
+                sx={{ width: 56, height: 56, p: 0, minWidth: 56 }}
               >
-                {l}
+                ∞
               </Button>
-            ))}
+            </Tooltip>
           </Box>
-          <Button
-            variant={levelForm === -1 ? 'contained' : 'outlined'}
-            color={levelForm === -1 ? 'success' : 'inherit'}
-            onClick={() => setLevelForm(-1)}
-            size="small"
-          >
-            无限制（-1）
-          </Button>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLevelDialog(null)}>取消</Button>

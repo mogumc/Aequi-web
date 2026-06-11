@@ -45,6 +45,7 @@ export interface UpstreamStats {
   keys_total: number
   keys_active: number
   keys_invalid: number
+  keys_cooldown: number
   selected_total: number
   responses_2xx: number
   responses_3xx: number
@@ -76,6 +77,7 @@ export interface Stats {
   queue_enabled: boolean
   prompt_tokens_total?: number
   completion_tokens_total?: number
+  thought_tokens_total?: number
   tokens_total?: number
   upstreams: UpstreamStats[]
 }
@@ -92,6 +94,7 @@ export interface Upstream {
   keys_total: number
   keys_active: number
   keys_invalid: number
+  keys_cooldown: number
   selected_total: number
   responses_2xx: number
   responses_3xx: number
@@ -174,7 +177,7 @@ export const api = {
 
   // Stats
   getStats: () => request<Stats>('/stats'),
-  getMetrics: (window: 'minute' | 'hour' | 'day' = 'hour') =>
+  getMetrics: (window = '1m') =>
     request<MetricsResponse>(`/metrics?window=${window}`),
   getRequests: (limit = 50) =>
     request<{ count: number; now_ms: number; requests: unknown[] }>(`/requests?limit=${limit}`),
@@ -246,14 +249,14 @@ export const api = {
   createBillingKey: (key: string, balance: number) =>
     request<BillingKey>('/billing/keys', { method: 'POST', body: JSON.stringify({ key, balance }) }),
   getBillingKey: (key: string) =>
-    request<BillingKey>(`/billing/keys/${key}`),
+    request<BillingKey>(`/billing/${key}`),
   adjustBalance: (key: string, delta: number) =>
-    request<BillingKey>(`/billing/keys/${key}/adjust`, {
+    request<BillingKey>(`/billing/${key}/adjust`, {
       method: 'POST',
       body: JSON.stringify({ delta }),
     }),
   deleteBillingKey: (key: string) =>
-    request<void>(`/billing/keys/${key}`, { method: 'DELETE' }),
+    request<void>(`/billing/${key}`, { method: 'DELETE' }),
 
   // System
   reload: () => request<{ ok: boolean }>('/reload', { method: 'POST' }),
