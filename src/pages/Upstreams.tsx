@@ -257,7 +257,7 @@ export default function Upstreams() {
               <Select value={form.format} label="格式" onChange={e => setForm(f => ({ ...f, format: e.target.value }))}>
                 <MenuItem value="openai">OpenAI</MenuItem>
                 <MenuItem value="anthropic">Anthropic</MenuItem>
-                <MenuItem value="custom">Custom</MenuItem>
+                <MenuItem value="gemini">Gemini</MenuItem>
               </Select>
             </FormControl>
           </Box>
