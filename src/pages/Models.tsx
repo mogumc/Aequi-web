@@ -120,11 +120,13 @@ export default function Models() {
     setCheckedModels([])
   }
 
-  // 路由表数据（现有映射）
+  // 路由表数据（现有映射），按选择的上游筛选
   const modelRows: { model: string; upstreams: string[] }[] = []
   if (routes?.models) {
     for (const [model, ups] of Object.entries(routes.models)) {
-      modelRows.push({ model, upstreams: Array.isArray(ups) ? ups : [] })
+      if (!selectedUpstream || ups.includes(selectedUpstream)) {
+        modelRows.push({ model, upstreams: Array.isArray(ups) ? ups : [] })
+      }
     }
   }
 

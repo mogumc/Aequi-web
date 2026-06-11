@@ -1,12 +1,14 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   Card, CardContent, Typography, Box, Button, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Alert, Snackbar,
   Chip, Switch, FormControlLabel, Divider, Grid,
+  Select, MenuItem, InputLabel, FormControl, TextField,
 } from '@mui/material'
 import {
   Refresh as RefreshIcon,
   Code as CodeIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material'
 import { api } from '../api/client'
 
@@ -86,12 +88,15 @@ export default function Requests() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [selected, setSelected] = useState<RequestItem | null>(null)
   const [showRaw, setShowRaw] = useState(false)
+  const [limit, setLimit] = useState(200)
+  const [filterText, setFilterText] = useState('')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const load = async () => {
+  const load = async (reqLimit?: number) => {
+    const n = reqLimit ?? limit
     setLoading(true)
     try {
-      const res = await api.getRequests(200)
+      const res = await api.getRequests(n)
       const list = Array.isArray(res?.requests) ? res.requests : []
       setRequests(list as RequestItem[])
     } catch (e: any) {
@@ -117,20 +122,59 @@ export default function Requests() {
     return '-'
   }
 
+  const filteredRequests = useMemo(() => {
+    if (!filterText.trim()) return requests
+    const kw = filterText.trim().toLowerCase()
+    return requests.filter(r =>
+      String(r.id).includes(kw) ||
+      (r.client_ip ?? '').toLowerCase().includes(kw) ||
+      (r.method ?? '').toLowerCase().includes(kw) ||
+      (r.path ?? '').toLowerCase().includes(kw) ||
+      (r.model ?? '').toLowerCase().includes(kw) ||
+      String(r.status).includes(kw) ||
+      String(r.latency_ms).includes(kw) ||
+      (r.upstream_id ?? '').toLowerCase().includes(kw)
+    )
+  }, [requests, filterText])
+
   return (
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="h6">请求历史</Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <TextField
+                size="small" placeholder="搜索客户端IP/模型/上游/路径…"
+                value={filterText} onChange={e => setFilterText(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: <SearchIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: 20 }} />,
+                  },
+                }}
+                sx={{ minWidth: 220 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 90 }}>
+                <InputLabel>条数</InputLabel>
+                <Select
+                  label="条数"
+                  value={limit}
+                  onChange={e => { const v = Number(e.target.value); setLimit(v); load(v) }}
+                >
+                  <MenuItem value={50}>50</MenuItem>
+                  <MenuItem value={100}>100</MenuItem>
+                  <MenuItem value={200}>200</MenuItem>
+                  <MenuItem value={500}>500</MenuItem>
+                  <MenuItem value={1000}>1000</MenuItem>
+                </Select>
+              </FormControl>
               <FormControlLabel
                 control={<Switch size="small" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />}
                 label="自动刷新"
               />
-              <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>刷新</Button>
+              <Button startIcon={<RefreshIcon />} onClick={() => load()} disabled={loading}>刷新</Button>
             </Box>
           </Box>
 
@@ -148,13 +192,13 @@ export default function Requests() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {requests.length === 0 ? (
+                {filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
-                      <Typography sx={{ color: 'text.secondary', py: 4 }}>暂无请求记录</Typography>
+                      <Typography sx={{ color: 'text.secondary', py: 4 }}>{filterText ? '无匹配记录' : '暂无请求记录'}</Typography>
                     </TableCell>
                   </TableRow>
-                ) : requests.map(r => (
+                ) : filteredRequests.map(r => (
                   <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
                     <TableCell>
                       <Typography variant="caption">{new Date(r.ts_ms).toLocaleTimeString()}</Typography>
@@ -180,7 +224,7 @@ export default function Requests() {
           </TableContainer>
 
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            共 {requests.length} 条记录 | 点击行查看详情
+            共 {filteredRequests.length} / {requests.length} 条记录 | 点击行查看详情
           </Typography>
         </CardContent>
       </Card>
