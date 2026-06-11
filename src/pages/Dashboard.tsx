@@ -130,17 +130,23 @@ export default function Dashboard() {
 
       {/* Stats Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard title="RPS" value={stats?.rps?.toFixed(1) ?? '0'} icon={<SpeedIcon />} color="primary" sub="请求/秒" />
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <StatCard title="RPM" value={stats?.rpm?.toFixed(0) ?? '0'} icon={<SpeedIcon />} color="primary" sub="请求/分钟" />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard title="总请求" value={(stats?.requests_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} color="success" sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行时间`} />
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <StatCard title="总请求" value={(stats?.requests_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} color="success" sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行`} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <StatCard title="成功率" value={`${successRate}%`} icon={<CheckIcon />} color="info" sub={`${stats?.responses_4xx ?? 0} 4xx / ${stats?.responses_5xx ?? 0} 5xx`} />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <StatCard title="平均延迟" value={`${stats?.latency_avg_ms?.toFixed(0) ?? '0'}ms`} icon={<TimerIcon />} color="warning" sub={`${totalErrors} 错误`} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <StatCard title="总 Token" value={(stats?.tokens_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} color="secondary" sub={`入 ${(stats?.prompt_tokens_total ?? 0).toLocaleString()} / 出 ${(stats?.completion_tokens_total ?? 0).toLocaleString()}`} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <StatCard title="进行中" value={stats?.requests_inflight ?? 0} icon={<TrendingUpIcon />} color="warning" sub={`队列 ${stats?.queue_depth ?? 0}`} />
         </Grid>
       </Grid>
 
@@ -184,7 +190,11 @@ export default function Dashboard() {
                             color={(us.responses_5xx ?? 0) > 0 ? 'error' : 'default'} variant="outlined" />
                         </TableCell>
                         <TableCell>{(us.errors_network ?? 0) + (us.errors_timeout ?? 0)}</TableCell>
-                        <TableCell>{us.keys_active ?? 0}/{us.keys_total ?? 0}</TableCell>
+                        <TableCell>
+                          <Tooltip title={`${us.keys_invalid ?? 0} 无效`}>
+                            <span>{us.keys_active ?? 0}/{us.keys_total ?? 0}</span>
+                          </Tooltip>
+                        </TableCell>
                         <TableCell sx={{ minWidth: 100 }}>
                           <MiniBar value={us.selected_total ?? 0} max={maxSel} color="primary" />
                         </TableCell>

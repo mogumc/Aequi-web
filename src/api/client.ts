@@ -58,9 +58,11 @@ export interface Stats {
   ts_ms: number
   uptime_s: number
   max_retries: number
+  retry_status_codes?: number[]
   requests_total: number
   requests_inflight: number
-  rps: number
+  rpm?: number
+  upstream_selected_total?: number
   responses_2xx: number
   responses_3xx: number
   responses_4xx: number
@@ -69,8 +71,12 @@ export interface Stats {
   errors_network: number
   latency_avg_ms: number
   latency_max_ms: number
+  latency_count?: number
   queue_depth: number
   queue_enabled: boolean
+  prompt_tokens_total?: number
+  completion_tokens_total?: number
+  tokens_total?: number
   upstreams: UpstreamStats[]
 }
 
