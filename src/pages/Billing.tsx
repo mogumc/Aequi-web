@@ -4,7 +4,7 @@ import {
   DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Alert, Snackbar, IconButton, Tooltip, Grid, Chip,
 } from '@mui/material'
-import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Casino as GenerateIcon, Refresh as RefreshIcon, TrendingUp as LevelIcon } from '@mui/icons-material'
+import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Casino as GenerateIcon, Refresh as RefreshIcon, TrendingUp as LevelIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import { api, BillingKey, type BillingOverview } from '../api/client'
 
 function generateKey(): string {
@@ -28,6 +28,7 @@ export default function Billing() {
   const [overview, setOverview] = useState<BillingOverview | null>(null)
   const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
   const [levelForm, setLevelForm] = useState(-1)
+  const [deleteConfirm, setDeleteConfirm] = useState<BillingKey | null>(null)
 
   useEffect(() => {
     api.listBillingKeys().then(d => {
@@ -102,19 +103,22 @@ export default function Billing() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
+    try {
+      await api.deleteBillingKey(deleteConfirm.key)
+      setKeys(prev => prev.filter(k => k.key !== deleteConfirm.key))
+      setDeleteConfirm(null)
+      setSnack('计费密钥已删除')
+    } catch (e: any) {
+      setError(e?.message ?? '删除失败')
+    }
+  }
+
   const handleSetLevel = async () => {
     if (!levelDialog) return
     try {
-      const existing = await api.getKeyLevels().catch(() => ({} as Record<string, number>))
-      const data: Record<string, number> = existing && typeof existing === 'object' && !('error' in existing)
-        ? { ...existing }
-        : {}
-      if (levelForm === -1) {
-        delete data[levelDialog.key]
-      } else {
-        data[levelDialog.key] = levelForm
-      }
-      await api.setKeyLevels(data)
+      await api.setBillingKeyLevel(levelDialog.key, levelForm)
       setLevelDialog(null)
       setSnack(levelForm === -1 ? '已设为无限制' : `等级已设为 ${levelForm}`)
     } catch (e: any) {
@@ -247,6 +251,11 @@ export default function Billing() {
                           </IconButton>
                         </span>
                       </Tooltip>
+                      <Tooltip title="删除">
+                        <IconButton size="small" color="error" onClick={() => setDeleteConfirm(k)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -368,6 +377,19 @@ export default function Billing() {
         <DialogActions>
           <Button onClick={() => setLevelDialog(null)}>取消</Button>
           <Button variant="contained" onClick={handleSetLevel}>保存</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)}>
+        <DialogTitle>确认删除</DialogTitle>
+        <DialogContent>
+          <Typography>确定要删除计费密钥 <strong>{deleteConfirm?.key}</strong> 吗？</Typography>
+          <Typography variant="body2" color="error" sx={{ mt: 1 }}>此操作不可逆</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm(null)}>取消</Button>
+          <Button color="error" variant="contained" onClick={handleDelete}>删除</Button>
         </DialogActions>
       </Dialog>
 

@@ -246,6 +246,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ delta }),
     }),
+  deleteBillingKey: (key: string) =>
+    request<void>(`/billing/keys/${key}`, { method: 'DELETE' }),
 
   // System
   reload: () => request<{ ok: boolean }>('/reload', { method: 'POST' }),
@@ -259,4 +261,8 @@ export const api = {
   getKeyLevels: () => request<Record<string, number>>('/storage/key_levels'),
   setKeyLevels: (data: Record<string, number>) =>
     request<{ ok: boolean }>('/storage/key_levels', { method: 'POST', body: JSON.stringify(data) }),
+  setBillingKeyLevel: (key: string, level: number) =>
+    request<{ ok: boolean }>(`/billing/${key}/level`, { method: 'POST', body: JSON.stringify({ level }) }),
+  getBillingKeyLevel: (key: string) =>
+    request<{ key: string; level: number }>(`/billing/${key}/level`),
 }
