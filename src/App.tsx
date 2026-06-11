@@ -3,15 +3,16 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import {
   AppBar, Toolbar, Typography, Drawer, List, ListItemButton, ListItemIcon,
   ListItemText, Box, IconButton, Tooltip, Dialog, TextField, DialogTitle,
-  DialogContent, DialogActions, Button, Chip, useMediaQuery,
+  DialogContent, DialogActions, Button, Chip, useMediaQuery, useTheme,
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
   Psychology as ModelIcon, AccountBalance as BillingIcon,
   Settings as ConfigIcon, Menu as MenuIcon, VpnKey as TokenIcon,
   History as RequestsIcon,
+  LightMode, DarkMode, SettingsBrightness,
 } from '@mui/icons-material'
-import { theme } from './theme'
+import { useThemeMode } from './contexts/ThemeModeContext'
 import { setAdminToken, getAdminToken } from './api/client'
 import Dashboard from './pages/Dashboard'
 import Upstreams from './pages/Upstreams'
@@ -32,10 +33,24 @@ const NAV_ITEMS = [
   { path: '/config', label: '系统配置', icon: <ConfigIcon /> },
 ]
 
+const THEME_MODE_LABELS: Record<string, string> = {
+  system: '跟随系统',
+  light: '亮色模式',
+  dark: '暗色模式',
+}
+
+const THEME_MODE_ICONS: Record<string, React.ReactNode> = {
+  system: <SettingsBrightness />,
+  light: <LightMode />,
+  dark: <DarkMode />,
+}
+
 export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const muiTheme = useTheme()
+  const { mode: themeMode, cycleMode } = useThemeMode()
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
   const [tokenDialog, setTokenDialog] = useState(false)
   const [tokenInput, setTokenInput] = useState(getAdminToken())
@@ -77,7 +92,12 @@ export default function App() {
           </ListItemButton>
         ))}
       </List>
-      <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Tooltip title={`主题：${THEME_MODE_LABELS[themeMode]}（点击切换）`}>
+          <IconButton size="small" onClick={cycleMode} sx={{ color: 'text.secondary' }}>
+            {THEME_MODE_ICONS[themeMode]}
+          </IconButton>
+        </Tooltip>
         <Chip
           icon={<TokenIcon />}
           label={getAdminToken() ? '已配置 Token' : '未配置 Token'}
