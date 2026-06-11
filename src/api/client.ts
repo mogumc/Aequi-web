@@ -81,6 +81,8 @@ export interface Upstream {
   format: string
   proxy: string | null
   max_concurrent_per_key: number | null
+  model_map: Record<string, string> | null
+  min_key_level: number | null
   keys_total: number
   keys_active: number
   keys_invalid: number
@@ -128,10 +130,34 @@ export interface BillingKey {
   key: string
   balance: number
   created_at?: string
+  level?: number
 }
 
 export interface Config {
   [key: string]: unknown
+}
+
+export type ModelCosts = Record<string, { input: number; output: number }>
+
+export interface BillingOverview {
+  billing: {
+    total_keys: number
+    unlimited_keys: number
+    active_keys: number
+    exhausted_keys: number
+    total_balance: number
+  }
+  model_costs: { model: string; input: number; output: number }[]
+  upstreams: {
+    id: string
+    total_keys: number
+    active_keys: number
+    format: string
+    min_key_level: number
+    model_map: string[]
+  }[]
+  requests_total: number
+  requests_inflight: number
 }
 
 // --- API Functions ---
@@ -150,10 +176,10 @@ export const api = {
 
   // Upstreams
   getUpstreams: () => request<Upstream[]>('/upstreams'),
-  createUpstream: (data: { id: string; base_url: string; weight?: number; format?: string; proxy?: string }) =>
-    request<Upstream>('/upstreams', { method: 'POST', body: JSON.stringify(data) }),
+  createUpstream: (data: { id: string; base_url: string; weight?: number; format?: string; proxy?: string; model_map?: Record<string, string>; min_key_level?: number }) =>
+    request<{ ok: boolean; upstreams: number }>('/upstreams', { method: 'POST', body: JSON.stringify(data) }),
   updateUpstream: (id: string, data: Partial<Upstream>) =>
-    request<Upstream>(`/upstreams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request<{ ok: boolean }>(`/upstreams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUpstream: (id: string, deleteKeys = false) =>
     request<void>(`/upstreams/${id}${deleteKeys ? '?delete_keys=1' : ''}`, { method: 'DELETE' }),
 
@@ -208,6 +234,7 @@ export const api = {
     }),
 
   // Billing
+  getBillingOverview: () => request<BillingOverview>('/billing/overview'),
   listBillingKeys: () =>
     request<{ keys: BillingKey[] }>('/billing/keys'),
   createBillingKey: (key: string, balance: number) =>
@@ -222,4 +249,14 @@ export const api = {
 
   // System
   reload: () => request<{ ok: boolean }>('/reload', { method: 'POST' }),
+
+  // Model Costs
+  getModelCosts: () => request<ModelCosts>('/model-costs'),
+  setModelCosts: (data: ModelCosts) =>
+    request<{ ok: boolean }>('/model-costs', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Key Levels
+  getKeyLevels: () => request<Record<string, number>>('/storage/key_levels'),
+  setKeyLevels: (data: Record<string, number>) =>
+    request<{ ok: boolean }>('/storage/key_levels', { method: 'POST', body: JSON.stringify(data) }),
 }

@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import {
   Card, CardContent, Typography, Box, Button, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Alert, Snackbar, IconButton, Tooltip,
+  TableHead, TableRow, Alert, Snackbar, IconButton, Tooltip, Grid, Chip,
 } from '@mui/material'
-import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Casino as GenerateIcon } from '@mui/icons-material'
-import { api, BillingKey } from '../api/client'
+import { Add as AddIcon, Search as SearchIcon, Edit as EditIcon, Casino as GenerateIcon, Refresh as RefreshIcon, TrendingUp as LevelIcon } from '@mui/icons-material'
+import { api, BillingKey, type BillingOverview } from '../api/client'
 
 function generateKey(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -25,10 +25,16 @@ export default function Billing() {
   const [adjustDelta, setAdjustDelta] = useState(0.001)
   const [adjustMode, setAdjustMode] = useState<'add' | 'subtract'>('add')
   const [snack, setSnack] = useState('')
+  const [overview, setOverview] = useState<BillingOverview | null>(null)
+  const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
+  const [levelForm, setLevelForm] = useState(-1)
 
   useEffect(() => {
     api.listBillingKeys().then(d => {
       setKeys(Array.isArray(d?.keys) ? d.keys : [])
+    }).catch(() => {})
+    api.getBillingOverview().then(d => {
+      if (d && typeof d === 'object' && 'billing' in d) setOverview(d)
     }).catch(() => {})
   }, [])
 
@@ -96,9 +102,73 @@ export default function Billing() {
     }
   }
 
+  const handleSetLevel = async () => {
+    if (!levelDialog) return
+    try {
+      const existing = await api.getKeyLevels().catch(() => ({} as Record<string, number>))
+      const data: Record<string, number> = existing && typeof existing === 'object' && !('error' in existing)
+        ? { ...existing }
+        : {}
+      if (levelForm === -1) {
+        delete data[levelDialog.key]
+      } else {
+        data[levelDialog.key] = levelForm
+      }
+      await api.setKeyLevels(data)
+      setLevelDialog(null)
+      setSnack(levelForm === -1 ? '已设为无限制' : `等级已设为 ${levelForm}`)
+    } catch (e: any) {
+      setError(e?.message ?? '设置等级失败')
+    }
+  }
+
   return (
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+
+      {/* Overview */}
+      {overview && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">费用概览</Typography>
+              <Button size="small" startIcon={<RefreshIcon />} onClick={() =>
+                api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
+              }>刷新</Button>
+            </Box>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" color="primary" variant="outlined" label={`总密钥 ${overview.billing.total_keys}`} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" color="info" variant="outlined" label={`活跃 ${overview.billing.active_keys}`} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" color="warning" variant="outlined" label={`无限额度 ${overview.billing.unlimited_keys}`} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" color="error" variant="outlined" label={`耗尽 ${overview.billing.exhausted_keys}`} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" color="success" variant="outlined" label={`余额 ${overview.billing.total_balance.toLocaleString()}`} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <Chip size="small" variant="outlined" label={`请求 ${overview.requests_total}/${overview.requests_inflight}`} />
+              </Grid>
+            </Grid>
+            {overview.model_costs.length > 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                模型倍率: {overview.model_costs.map(m => `${m.model}(${m.input}/${m.output})`).join(', ')}
+              </Typography>
+            )}
+            {overview.upstreams.length > 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                上游: {overview.upstreams.map(u => `${u.id}[${u.active_keys}/${u.total_keys}]`).join(', ')}
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Query Section */}
       <Card sx={{ mb: 3 }}>
@@ -130,13 +200,14 @@ export default function Billing() {
                 <TableRow>
                   <TableCell>密钥</TableCell>
                   <TableCell>余额</TableCell>
+                  <TableCell>等级</TableCell>
                   <TableCell align="right">操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {keys.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center">
+                    <TableCell colSpan={4} align="center">
                       <Typography sx={{ color: 'text.secondary', py: 4 }}>输入密钥查询余额，或点击"新建"</Typography>
                     </TableCell>
                   </TableRow>
@@ -154,7 +225,20 @@ export default function Billing() {
                         {(k.balance ?? 0) === -1 ? '无限额度' : (k.balance ?? 0).toLocaleString()}
                       </Typography>
                     </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={k.level != null ? `Lv.${k.level}` : '无限制'}
+                        color={k.level != null ? 'info' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
                     <TableCell align="right">
+                      <Tooltip title="设置等级">
+                        <IconButton size="small" onClick={() => { setLevelDialog(k); setLevelForm(k.level ?? -1) }}>
+                          <LevelIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={(k.balance ?? 0) === -1 ? '无限额度密钥不支持调整' : '调整余额'}>
                         <span>
                           <IconButton size="small" onClick={() => { setAdjustDialog(k); setAdjustDelta(0) }}
@@ -250,6 +334,40 @@ export default function Billing() {
             disabled={adjustDelta <= 0 || ((adjustDialog?.balance ?? 0) + (adjustMode === 'add' ? adjustDelta : -adjustDelta)) < 0}>
             {adjustMode === 'add' ? '确认增加' : '确认扣除'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Level Dialog */}
+      <Dialog open={!!levelDialog} onClose={() => setLevelDialog(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>设置密钥等级</DialogTitle>
+        <DialogContent sx={{ pt: '16px !important' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            密钥: <strong>{levelDialog?.key}</strong>
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => (
+              <Button key={l} size="small"
+                variant={levelForm === l ? 'contained' : 'outlined'}
+                color={levelForm === l ? 'info' : 'inherit'}
+                onClick={() => setLevelForm(l)}
+                sx={{ minWidth: 40 }}
+              >
+                {l}
+              </Button>
+            ))}
+          </Box>
+          <Button
+            variant={levelForm === -1 ? 'contained' : 'outlined'}
+            color={levelForm === -1 ? 'success' : 'inherit'}
+            onClick={() => setLevelForm(-1)}
+            size="small"
+          >
+            无限制（-1）
+          </Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLevelDialog(null)}>取消</Button>
+          <Button variant="contained" onClick={handleSetLevel}>保存</Button>
         </DialogActions>
       </Dialog>
 

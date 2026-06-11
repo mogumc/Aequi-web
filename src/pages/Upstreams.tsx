@@ -18,9 +18,11 @@ interface UpstreamForm {
   weight: number
   format: string
   proxy: string
+  model_map: string // JSON string for key-value pairs
+  min_key_level: number
 }
 
-const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'openai', proxy: '' }
+const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'openai', proxy: '', model_map: '', min_key_level: 0 }
 
 export default function Upstreams() {
   const [upstreams, setUpstreams] = useState<Upstream[]>([])
@@ -55,6 +57,16 @@ export default function Upstreams() {
   useEffect(() => { load() }, [])
 
   const handleSave = async () => {
+    let parsedModelMap: Record<string, string> | undefined
+    if (form.model_map.trim()) {
+      try {
+        parsedModelMap = JSON.parse(form.model_map)
+        if (typeof parsedModelMap !== 'object' || Array.isArray(parsedModelMap)) throw new Error()
+      } catch {
+        setError('模型映射 JSON 格式无效')
+        return
+      }
+    }
     try {
       if (editing) {
         await api.updateUpstream(editing, {
@@ -62,6 +74,8 @@ export default function Upstreams() {
           weight: form.weight,
           format: form.format,
           proxy: form.proxy || undefined,
+          model_map: parsedModelMap ?? null,
+          min_key_level: form.min_key_level || undefined,
         } as any)
         setSnack('上游已更新')
       } else {
@@ -71,6 +85,8 @@ export default function Upstreams() {
           weight: form.weight,
           format: form.format,
           proxy: form.proxy || undefined,
+          model_map: parsedModelMap,
+          min_key_level: form.min_key_level || undefined,
         })
         setSnack('上游已创建')
       }
@@ -95,7 +111,11 @@ export default function Upstreams() {
   }
 
   const openEdit = (u: Upstream) => {
-    setForm({ id: u.id, base_url: u.base_url, weight: u.weight, format: u.format, proxy: u.proxy ?? '' })
+    setForm({
+      id: u.id, base_url: u.base_url, weight: u.weight, format: u.format, proxy: u.proxy ?? '',
+      model_map: u.model_map ? JSON.stringify(u.model_map, null, 2) : '',
+      min_key_level: u.min_key_level ?? 0,
+    })
     setEditing(u.id)
     setDialog(true)
   }
@@ -262,7 +282,15 @@ export default function Upstreams() {
             </FormControl>
           </Box>
           <TextField fullWidth label="代理 (可选)" value={form.proxy} onChange={e => setForm(f => ({ ...f, proxy: e.target.value }))}
-            placeholder="socks5://127.0.0.1:1080" />
+            placeholder="socks5://127.0.0.1:1080" sx={{ mb: 2 }} />
+          <TextField fullWidth label="最低密钥等级 (可选)" type="number" value={form.min_key_level}
+            onChange={e => setForm(f => ({ ...f, min_key_level: Number(e.target.value) }))}
+            helperText="设置为 0 表示不限制" sx={{ mb: 2 }} />
+          <TextField fullWidth label="模型重定向 (可选)" value={form.model_map}
+            onChange={e => setForm(f => ({ ...f, model_map: e.target.value }))}
+            placeholder='{"gpt-4o": "deepseek-chat"}'
+            helperText="JSON 格式，将请求中的模型名映射到目标模型" multiline minRows={2} maxRows={6}
+            sx={{ fontFamily: 'monospace' }} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialog(false)}>取消</Button>
