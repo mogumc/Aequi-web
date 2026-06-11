@@ -21,7 +21,7 @@ export default function Billing() {
   const [error, setError] = useState('')
   const [createDialog, setCreateDialog] = useState(false)
   const [adjustDialog, setAdjustDialog] = useState<BillingKey | null>(null)
-  const [createForm, setCreateForm] = useState({ key: '', balance: 0 })
+  const [createForm, setCreateForm] = useState({ key: '', balance: 0, level: -1 })
   const [adjustDelta, setAdjustDelta] = useState(0.001)
   const [adjustMode, setAdjustMode] = useState<'add' | 'subtract'>('add')
   const [snack, setSnack] = useState('')
@@ -71,9 +71,13 @@ export default function Billing() {
       const result = await api.createBillingKey(createForm.key, createForm.balance)
       if (result && typeof result === 'object' && result.key) {
         setKeys(prev => [result, ...prev])
+        // 设置等级
+        if (createForm.level !== -1) {
+          api.setBillingKeyLevel(createForm.key, createForm.level).catch(() => {})
+        }
       }
       setCreateDialog(false)
-      setCreateForm({ key: '', balance: 0 })
+      setCreateForm({ key: '', balance: 0, level: -1 })
       setSnack('计费密钥已创建')
     } catch (e: any) {
       setError(e?.message ?? '操作失败')
@@ -132,46 +136,136 @@ export default function Billing() {
 
       {/* Overview */}
       {overview && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">费用概览</Typography>
-              <Button size="small" startIcon={<RefreshIcon />} onClick={() =>
-                api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
-              }>刷新</Button>
-            </Box>
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" color="primary" variant="outlined" label={`总密钥 ${overview.billing.total_keys}`} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" color="info" variant="outlined" label={`活跃 ${overview.billing.active_keys}`} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" color="warning" variant="outlined" label={`无限额度 ${overview.billing.unlimited_keys}`} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" color="error" variant="outlined" label={`耗尽 ${overview.billing.exhausted_keys}`} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" color="success" variant="outlined" label={`余额 ${overview.billing.total_balance.toLocaleString()}`} />
-              </Grid>
-              <Grid size={{ xs: 6, sm: 2 }}>
-                <Chip size="small" variant="outlined" label={`请求 ${overview.requests_total}/${overview.requests_inflight}`} />
-              </Grid>
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">费用概览</Typography>
+            <Button size="small" startIcon={<RefreshIcon />} onClick={() =>
+              api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
+            }>刷新</Button>
+          </Box>
+          {/* Stat cards */}
+          <Grid container spacing={1.5} sx={{ mb: 2 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card sx={{ bgcolor: 'primary.light', color: 'primary.dark' }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>总密钥</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_keys}</Typography>
+                </CardContent>
+              </Card>
             </Grid>
-            {overview.model_costs.length > 0 && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                模型倍率: {overview.model_costs.map(m => `${m.model}(${m.input}/${m.output})`).join(', ')}
-              </Typography>
-            )}
-            {overview.upstreams.length > 0 && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                上游: {overview.upstreams.map(u => `${u.id}[${u.active_keys}/${u.total_keys}]`).join(', ')}
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card sx={{ bgcolor: 'success.light', color: 'success.dark' }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>活跃</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.active_keys}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card sx={{ bgcolor: 'warning.light', color: 'warning.dark' }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>无限额度</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.unlimited_keys}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card sx={{ bgcolor: 'error.light', color: 'error.dark' }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>耗尽</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.exhausted_keys}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card sx={{ bgcolor: 'info.light', color: 'info.dark' }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>总余额</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.billing.total_balance.toLocaleString()}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Card>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" color="text.secondary">请求</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{overview.requests_total}</Typography>
+                  <Typography variant="caption" color="text.secondary">进行中 {overview.requests_inflight}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Model costs */}
+          {overview.model_costs.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Card>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    模型倍率
+                    <Chip size="small" label={overview.model_costs.length} color="primary" variant="outlined" />
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5 }}>模型</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">输入倍率</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">输出倍率</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {overview.model_costs.map(m => (
+                        <TableRow key={m.model}>
+                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 13 }}>{m.model}</TableCell>
+                          <TableCell sx={{ py: 0.5 }} align="right">{m.input}</TableCell>
+                          <TableCell sx={{ py: 0.5 }} align="right">{m.output}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+
+          {/* Upstreams */}
+          {overview.upstreams.length > 0 && (
+            <Box>
+              <Card>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    上游概览
+                    <Chip size="small" label={overview.upstreams.length} color="primary" variant="outlined" />
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5 }}>上游</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">密钥</TableCell>
+                        <TableCell sx={{ py: 0.5 }}>最低等级</TableCell>
+                        <TableCell sx={{ py: 0.5 }}>重定向</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {overview.upstreams.map(u => (
+                        <TableRow key={u.id}>
+                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{u.id}</TableCell>
+                          <TableCell sx={{ py: 0.5 }} align="right">{u.active_keys}/{u.total_keys}</TableCell>
+                          <TableCell sx={{ py: 0.5 }}>
+                            <Chip size="small" label={u.min_key_level > 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
+                          </TableCell>
+                          <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>
+                            {u.model_map.length > 0 ? JSON.stringify(u.model_map) : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+        </Box>
       )}
 
       {/* Query Section */}
@@ -274,7 +368,8 @@ export default function Billing() {
               onChange={e => setCreateForm(f => ({ ...f, key: e.target.value }))}
               placeholder="hs-xxxx" />
             <Tooltip title="快速生成密钥">
-              <Button variant="outlined" sx={{ minWidth: 48 }} onClick={() => setCreateForm(f => ({ ...f, key: generateKey() }))}>
+              <Button variant="outlined" onClick={() => setCreateForm(f => ({ ...f, key: generateKey() }))}
+                sx={{ minWidth: 48, height: 40, mt: '8px' }}>
                 <GenerateIcon />
               </Button>
             </Tooltip>
@@ -293,11 +388,34 @@ export default function Billing() {
                 variant={createForm.balance === -1 ? 'contained' : 'outlined'}
                 color={createForm.balance === -1 ? 'success' : 'primary'}
                 onClick={() => setCreateForm(f => ({ ...f, balance: f.balance === -1 ? 0 : -1 }))}
-                sx={{ minWidth: 48, height: 56, mt: '8px' }}
+                sx={{ minWidth: 48, height: 40, mt: '8px' }}
               >
                 ∞
               </Button>
             </Tooltip>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>密钥等级</Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => (
+                <Button key={l} size="small"
+                  variant={createForm.level === l ? 'contained' : 'outlined'}
+                  color={createForm.level === l ? 'info' : 'inherit'}
+                  onClick={() => setCreateForm(f => ({ ...f, level: l }))}
+                  sx={{ minWidth: 40 }}
+                >
+                  {l}
+                </Button>
+              ))}
+              <Button size="small"
+                variant={createForm.level === -1 ? 'contained' : 'outlined'}
+                color={createForm.level === -1 ? 'success' : 'inherit'}
+                onClick={() => setCreateForm(f => ({ ...f, level: -1 }))}
+                sx={{ minWidth: 40 }}
+              >
+                无限制
+              </Button>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
