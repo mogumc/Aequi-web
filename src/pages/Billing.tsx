@@ -98,7 +98,7 @@ export default function Billing() {
     try {
       const balance = createForm.balance === '' ? 0 : Number(createForm.balance)
       await api.createBillingKey(createForm.key, balance)
-      if (createForm.level !== '' && createForm.level !== -1) {
+      if (createForm.level !== '') {
         await api.setBillingKeyLevel(createForm.key, Number(createForm.level)).catch(() => {})
       }
       setCreateDialog(false)
