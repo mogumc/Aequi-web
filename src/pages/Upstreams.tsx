@@ -461,7 +461,7 @@ export default function Upstreams() {
                 <MenuItem value="">全部上游</MenuItem>
                 {upstreams.map(u => (
                   <MenuItem key={u.id} value={u.id}>
-                    {u.id} (keys={u.keys_total})
+                    {u.id}
                   </MenuItem>
                 ))}
               </Select>
