@@ -10,7 +10,7 @@ import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
   Refresh as RefreshIcon, VpnKey as KeyIcon, AddCircle as AddKeyIcon,
   RemoveCircle as RemoveKeyIcon, Healing as ReleaseIcon,
-  Save as SaveIcon,
+  Save as SaveIcon, Search as SearchIcon,
 } from '@mui/icons-material'
 import { api, Upstream, KeyItem, ModelRoutesResponse } from '../api/client'
 import type { ModelCosts as ModelCostsType } from '../api/client'
@@ -59,6 +59,7 @@ export default function Upstreams() {
   const [checkedModels, setCheckedModels] = useState<string[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [modelSearch, setModelSearch] = useState('')
 
   // 模型倍率相关
   const [costs, setCosts] = useState<CostEntry[]>([])
@@ -478,9 +479,20 @@ export default function Upstreams() {
           {availableModels.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2">
+                <Typography variant="subtitle2" sx={{ mr: 1 }}>
                   可用模型 ({checkedModels.length}/{availableModels.length})
                 </Typography>
+                <TextField
+                  size="small" placeholder="搜索模型…"
+                  value={modelSearch} onChange={e => setModelSearch(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: <SearchIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: 20 }} />,
+                      sx: { fontSize: 13 },
+                    },
+                  }}
+                  sx={{ minWidth: 180, maxWidth: 300 }}
+                />
                 <Button size="small" onClick={checkedModels.length === availableModels.length ? selectNone : selectAll}>
                   {checkedModels.length === availableModels.length ? '全不选' : '全选'}
                 </Button>
@@ -501,7 +513,9 @@ export default function Upstreams() {
                 maxHeight: 300, overflow: 'auto',
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 0.5,
               }}>
-                {availableModels.map(model => (
+                {availableModels
+                  .filter(m => !modelSearch.trim() || m.toLowerCase().includes(modelSearch.trim().toLowerCase()))
+                  .map(model => (
                   <Box
                     key={model}
                     sx={{
@@ -513,6 +527,11 @@ export default function Upstreams() {
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 13 }}>{model}</Typography>
                   </Box>
                 ))}
+                {modelSearch.trim() && availableModels.filter(m => m.toLowerCase().includes(modelSearch.trim().toLowerCase())).length === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, gridColumn: '1 / -1', textAlign: 'center' }}>
+                    无匹配模型
+                  </Typography>
+                )}
               </Box>
             </Box>
           )}
