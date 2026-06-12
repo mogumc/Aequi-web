@@ -7,7 +7,7 @@ import {
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon, Dns as UpstreamIcon, Key as KeyIcon,
-  Psychology as ModelIcon, AccountBalance as BillingIcon,
+  AccountBalance as BillingIcon,
   Settings as ConfigIcon, Menu as MenuIcon, VpnKey as TokenIcon,
   History as RequestsIcon,
   LightMode, DarkMode, SettingsBrightness,
@@ -25,7 +25,6 @@ const hideNativeToggle = `
 `
 import Dashboard from './pages/Dashboard'
 import Upstreams from './pages/Upstreams'
-import Models from './pages/Models'
 import Billing from './pages/Billing'
 import Config from './pages/Config'
 import Requests from './pages/Requests'
@@ -35,7 +34,6 @@ const NAV_ITEMS = [
   { path: '/dashboard', label: '仪表盘', icon: <DashboardIcon /> },
   { path: '/requests', label: '请求历史', icon: <RequestsIcon /> },
   { path: '/upstreams', label: '上游管理', icon: <UpstreamIcon /> },
-  { path: '/models', label: '模型管理', icon: <ModelIcon /> },
   { path: '/billing', label: '计费密钥', icon: <BillingIcon /> },
   { path: '/config', label: '系统配置', icon: <ConfigIcon /> },
 ]
@@ -154,7 +152,6 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/upstreams" element={<Upstreams />} />
-          <Route path="/models" element={<Models />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/config" element={<Config />} />

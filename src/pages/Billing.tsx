@@ -17,6 +17,22 @@ function formatNum(n: number): string {
   return val.toFixed(3).replace(/\.?0+$/, '') + units[i]
 }
 
+function formatCredits(n: number): string {
+  if (n >= 1_000_000_000) {
+    const v = n / 1_000_000_000
+    return v % 1 === 0 ? `${v.toFixed(0)}B` : `${v.toFixed(3).replace(/\.?0+$/, '')}B`
+  }
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return v % 1 === 0 ? `${v.toFixed(0)}M` : `${v.toFixed(3).replace(/\.?0+$/, '')}M`
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return v % 1 === 0 ? `${v.toFixed(0)}K` : `${v.toFixed(3).replace(/\.?0+$/, '')}K`
+  }
+  return n.toFixed(6).replace(/\.?0+$/, '') || '0'
+}
+
 function generateKey(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const arr = new Uint8Array(48)
@@ -200,10 +216,10 @@ export default function Billing() {
                 <Typography variant="caption" color="text.secondary">余额</Typography>
                 <Typography variant="h5" sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 1, overflow: 'hidden' }}>
                   <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {overview?.billing?.total_balance?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 }) ?? '-'}
+                    {formatCredits(overview?.billing?.total_balance ?? 0)}
                   </Box>
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400, flexShrink: 0 }}>
-                    已用 {overview?.usage?.credits?.toFixed(3) ?? '-'}
+                    已用 {formatCredits(overview?.usage?.credits ?? 0)}
                   </Typography>
                 </Typography>
               </CardContent>
@@ -275,7 +291,7 @@ export default function Billing() {
                         <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{u.id}</TableCell>
                         <TableCell sx={{ py: 0.5 }} align="right">{u.active_keys}/{u.total_keys}</TableCell>
                         <TableCell sx={{ py: 0.5 }}>
-                          <Chip size="small" label={u.min_key_level > 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
+                          <Chip size="small" label={u.min_key_level != null && u.min_key_level >= 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>
                           {u.model_map.length > 0 ? JSON.stringify(u.model_map) : '-'}
@@ -339,11 +355,11 @@ export default function Billing() {
                         color: (k.balance ?? 0) < 0 && (k.balance ?? 0) !== -1 ? 'error'
                           : (k.balance ?? 0) === -1 ? 'text.secondary' : 'inherit'
                       }}>
-                        {(k.balance ?? 0) === -1 ? '无限额度' : (k.balance ?? 0).toLocaleString()}
+                        {(k.balance ?? 0) === -1 ? '无限额度' : formatCredits(k.balance ?? 0)}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 600 }}>{usage ? usage.credits.toFixed(3) : '-'}</Typography>
+                      <Typography sx={{ fontWeight: 600 }}>{usage ? formatCredits(usage.credits) : '-'}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography sx={{ fontWeight: 600 }}>{usage ? formatNum(usage.tokens) : '-'}</Typography>

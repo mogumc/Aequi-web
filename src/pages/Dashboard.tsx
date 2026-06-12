@@ -43,6 +43,30 @@ function formatUptime(s: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+function formatLargeNumber(n: number): string {
+  if (n >= 1_000_000_000) {
+    const v = n / 1_000_000_000
+    return v % 1 === 0 ? `${v.toFixed(0)}B` : `${v.toFixed(1)}B`
+  }
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return v % 1 === 0 ? `${v.toFixed(0)}M` : `${v.toFixed(1)}M`
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return v % 1 === 0 ? `${v.toFixed(0)}K` : `${v.toFixed(1)}K`
+  }
+  return n.toLocaleString()
+}
+
+function formatLatency(ms: number): string {
+  if (ms >= 1000) {
+    const s = ms / 1000
+    return s % 1 === 0 ? `${s.toFixed(0)}s` : `${s.toFixed(1)}s`
+  }
+  return `${Math.round(ms)}ms`
+}
+
 function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
   return (
@@ -137,13 +161,13 @@ export default function Dashboard() {
           <StatCard title="成功率" value={`${successRate}%`} icon={<CheckIcon />} sub={`${stats?.responses_4xx ?? 0} 4xx / ${stats?.responses_5xx ?? 0} 5xx`} />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-          <StatCard title="平均延迟" value={`${stats?.latency_avg_ms?.toFixed(0) ?? '0'}ms`} icon={<TimerIcon />} sub={`${totalErrors} 错误`} />
+          <StatCard title="平均延迟" value={formatLatency(stats?.latency_avg_ms ?? 0)} icon={<TimerIcon />} sub={`${totalErrors} 错误`} />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-          <StatCard title="总请求" value={(stats?.requests_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行`} />
+          <StatCard title="总请求" value={formatLargeNumber(stats?.requests_total ?? 0)} icon={<TrendingUpIcon />} sub={`${formatUptime(stats?.uptime_s ?? 0)} 运行`} />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 4 }}>
-          <StatCard title="总 Token" value={(stats?.tokens_total ?? 0).toLocaleString()} icon={<TrendingUpIcon />} sub={`输入 ${(stats?.prompt_tokens_total ?? 0).toLocaleString()} / 输出 ${(stats?.completion_tokens_total ?? 0).toLocaleString()}`} />
+          <StatCard title="总词元" value={formatLargeNumber(stats?.tokens_total ?? 0)} icon={<TrendingUpIcon />} sub={`输入 ${formatLargeNumber(stats?.prompt_tokens_total ?? 0)} / 输出 ${formatLargeNumber(stats?.completion_tokens_total ?? 0)}`} />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 4 }}>
           <StatCard title="进行中" value={stats?.requests_inflight ?? 0} icon={<TrendingUpIcon />} sub={`队列 ${stats?.queue_depth ?? 0}`} />
