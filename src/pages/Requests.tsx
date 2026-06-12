@@ -85,7 +85,7 @@ export default function Requests() {
     try {
       const res = await api.getRequests(n)
       const list = Array.isArray(res?.requests) ? res.requests : []
-      setRequests(list as RequestItem[])
+      setRequests((list as RequestItem[]).sort((a, b) => b.ts_ms - a.ts_ms))
       setHistoryEnd(false)
     } catch (e: any) {
       setError(e?.message ?? '加载失败')
@@ -103,7 +103,11 @@ export default function Requests() {
       if (list.length === 0) {
         setHistoryEnd(true)
       } else {
-        setRequests(prev => [...prev, ...list as RequestItem[]])
+        setRequests(prev => {
+          const merged = [...prev, ...list as RequestItem[]]
+          merged.sort((a, b) => b.ts_ms - a.ts_ms)
+          return merged
+        })
       }
     } catch (e: any) {
       setError(e?.message ?? '加载历史失败')
