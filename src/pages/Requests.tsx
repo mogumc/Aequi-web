@@ -133,9 +133,10 @@ export default function Requests() {
   }
 
   const filteredRequests = useMemo(() => {
-    if (!filterText.trim()) return requests
+    const sorted = [...requests].sort((a, b) => b.ts_ms - a.ts_ms)
+    if (!filterText.trim()) return sorted
     const kw = filterText.trim().toLowerCase()
-    return requests.filter(r =>
+    return sorted.filter(r =>
       String(r.id).includes(kw) ||
       (r.client_ip ?? '').toLowerCase().includes(kw) ||
       (r.method ?? '').toLowerCase().includes(kw) ||
