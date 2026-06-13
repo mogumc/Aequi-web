@@ -653,7 +653,7 @@ export default function Upstreams() {
                     <TableCell><Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{c.model}</Typography></TableCell>
                     <TableCell>{c.per_request ? '-' : c.input}</TableCell>
                     <TableCell>{c.per_request ? '-' : c.output}</TableCell>
-                    <TableCell>{c.per_request ? `${c.per_request} µcredit` : '-'}</TableCell>
+                    <TableCell>{c.per_request ? `${c.per_request} 余额` : '-'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="编辑"><IconButton size="small" onClick={() => openEditCost(i)}><EditIcon fontSize="small" /></IconButton></Tooltip>
                       <Tooltip title="删除"><IconButton size="small" color="error" onClick={() => handleDeleteCost(i)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
@@ -832,7 +832,7 @@ export default function Upstreams() {
               disabled={!!costForm.per_request} />
           </Box>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-            <TextField fullWidth label="按次计费 (µcredit)" type="number" value={costForm.per_request ?? ''}
+            <TextField fullWidth label="按次计费" type="number" value={costForm.per_request ?? ''}
               slotProps={{ htmlInput: { min: 0, step: '0.001' } }}
               onChange={e => setCostForm(f => ({ ...f, per_request: e.target.value === '' ? undefined : Number(e.target.value), input: e.target.value !== '' ? 0 : f.input, output: e.target.value !== '' ? 0 : f.output }))}
               placeholder="留空则使用 Token 计费"

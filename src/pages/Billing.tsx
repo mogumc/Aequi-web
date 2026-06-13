@@ -283,7 +283,7 @@ export default function Billing() {
                         <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 13 }}>{m.model}</TableCell>
                         <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? '-' : m.input}</TableCell>
                         <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? '-' : m.output}</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? `${m.per_request} µcredit` : '-'}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? `${m.per_request} 余额` : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
