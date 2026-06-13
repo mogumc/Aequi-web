@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import {
   Card, CardContent, Typography, Box, Button, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Alert, Snackbar,
@@ -78,21 +78,30 @@ export default function Requests() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [historyEnd, setHistoryEnd] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
+  const loadIdRef = useRef(0)
+  const [tableKey, setTableKey] = useState(0)
 
-  const load = async (reqLimit?: number) => {
+  const load = useCallback(async (reqLimit?: number) => {
     const n = reqLimit ?? limit
     setError('')
     setLoading(true)
+    const myId = ++loadIdRef.current
     try {
       const res = await api.getRequests(n)
+      if (myId !== loadIdRef.current) return
       const list = Array.isArray(res?.requests) ? res.requests : []
-      setRequests((list as RequestItem[]).sort((a, b) => b.ts_ms - a.ts_ms))
+      const sorted = [...list].sort((a, b) => (b as RequestItem).ts_ms - (a as RequestItem).ts_ms || (b as RequestItem).id - (a as RequestItem).id)
+      setRequests(sorted as RequestItem[])
+      setTableKey(k => k + 1)
       setHistoryEnd(false)
+      tableRef.current?.scrollTo(0, 0)
     } catch (e: any) {
+      if (myId !== loadIdRef.current) return
       setError(e?.message ?? '加载失败')
     }
     setLoading(false)
-  }
+  }, [limit])
 
   const loadMore = async () => {
     if (loadingMore || requests.length === 0) return
@@ -107,7 +116,7 @@ export default function Requests() {
       } else {
         setRequests(prev => {
           const merged = [...prev, ...list as RequestItem[]]
-          merged.sort((a, b) => b.ts_ms - a.ts_ms)
+          merged.sort((a, b) => b.ts_ms - a.ts_ms || b.id - a.id)
           return merged
         })
       }
@@ -125,7 +134,7 @@ export default function Requests() {
       timerRef.current = setInterval(load, 5000)
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [autoRefresh])
+  }, [autoRefresh, load])
 
   const statusColor = (s: number) => s >= 200 && s < 300 ? 'success' : s >= 400 && s < 500 ? 'warning' : s >= 500 ? 'error' : 'default'
 
@@ -135,7 +144,7 @@ export default function Requests() {
   }
 
   const filteredRequests = useMemo(() => {
-    const sorted = [...requests].sort((a, b) => b.ts_ms - a.ts_ms)
+    const sorted = [...requests].sort((a, b) => b.ts_ms - a.ts_ms || b.id - a.id)
     if (!filterText.trim()) return sorted
     const kw = filterText.trim().toLowerCase()
     return sorted.filter(r =>
@@ -194,7 +203,7 @@ export default function Requests() {
             />
           </Box>
 
-          <TableContainer sx={{ maxHeight: 500 }}>
+          <TableContainer ref={tableRef} sx={{ maxHeight: 500 }}>
             <Table size="small" stickyHeader sx={{ '& td:not(:nth-of-type(4))': { fontFamily: 'monospace', fontSize: 13, fontWeight: 600 } }}>
               <TableHead>
                 <TableRow>
@@ -207,7 +216,7 @@ export default function Requests() {
                   <TableCell sx={{ fontWeight: 600 }}>上游</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody key={tableKey}>
                 {filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
