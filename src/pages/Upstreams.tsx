@@ -36,6 +36,7 @@ const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'open
 export default function Upstreams() {
   const [upstreams, setUpstreams] = useState<Upstream[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState('')
   const [dialog, setDialog] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
@@ -69,6 +70,7 @@ export default function Upstreams() {
   const [costForm, setCostForm] = useState<CostEntry>({ model: '', input: 0, output: 0 })
 
   const load = async () => {
+    setError('')
     setLoading(true)
     try {
       const data = await api.getUpstreams()
@@ -103,7 +105,14 @@ export default function Upstreams() {
 
   useEffect(() => { load(); loadRoutes(); loadCosts() }, [])
 
+  useEffect(() => {
+    if (!loading) { setLoadingSlow(false); return }
+    const t = setTimeout(() => setLoadingSlow(true), 4000)
+    return () => clearTimeout(t)
+  }, [loading])
+
   const handleSave = async () => {
+    setError('')
     let parsedModelMap: Record<string, string> | undefined
     if (form.model_map.trim()) {
       try {
@@ -148,6 +157,7 @@ export default function Upstreams() {
   }
 
   const handleDelete = async (id: string) => {
+    setError('')
     try {
       await api.deleteUpstream(id, true)
       setSnack('上游已删除')
@@ -177,6 +187,7 @@ export default function Upstreams() {
 
   // --- Key management ---
   const loadKeys = async (upstreamId: string) => {
+    setError('')
     setKeysLoading(true)
     try {
       const res = await api.getKeys(upstreamId, 0, 200)
@@ -198,6 +209,7 @@ export default function Upstreams() {
 
   const handleAddKeys = async () => {
     if (!keyDialog || !newKeys.trim()) return
+    setError('')
     try {
       const res = await api.addKeys(keyDialog, newKeys.trim())
       setSnack(`已添加 ${res?.added ?? 0} 个密钥`)
@@ -211,6 +223,7 @@ export default function Upstreams() {
 
   const handleDeleteKeys = async () => {
     if (!keyDialog || selectedKeys.size === 0) return
+    setError('')
     try {
       await api.deleteKeys(keyDialog, Array.from(selectedKeys))
       setSnack(`已删除 ${selectedKeys.size} 个密钥`)
@@ -223,6 +236,7 @@ export default function Upstreams() {
 
   const handleReleaseAll = async () => {
     if (!keyDialog) return
+    setError('')
     try {
       await api.releaseKeys(keyDialog)
       setSnack('已释放所有冷却中的密钥')
@@ -243,6 +257,7 @@ export default function Upstreams() {
 
   // --- 模型映射 ---
   const refreshModels = async () => {
+    setError('')
     if (!selectedUpstream) {
       setError('请先选择上游')
       return
@@ -289,6 +304,7 @@ export default function Upstreams() {
 
   const saveRoutes = async () => {
     if (!routes?.upstreams) return
+    setError('')
     setSaving(true)
     try {
       const res = await api.updateModelRoutes({ upstreams: routes.upstreams })
@@ -320,6 +336,7 @@ export default function Upstreams() {
   const openEditCost = (i: number) => { setCostEditing(i); setCostForm({ ...costs[i] }); setCostDialog(true) }
 
   const handleSaveCost = async () => {
+    setError('')
     if (!costForm.model.trim()) { setError('请输入模型名称'); return }
     const newCosts = costEditing !== null ? costs.map((c, i) => i === costEditing ? { ...costForm } : c) : [...costs, { ...costForm }]
     const payload: ModelCostsType = {}
@@ -333,6 +350,7 @@ export default function Upstreams() {
   }
 
   const handleDeleteCost = async (i: number) => {
+    setError('')
     const newCosts = costs.filter((_, idx) => idx !== i)
     const payload: ModelCostsType = {}
     for (const entry of newCosts) payload[entry.model] = { input: entry.input, output: entry.output }
@@ -356,6 +374,11 @@ export default function Upstreams() {
   return (
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      {loadingSlow && (
+        <Alert severity="info" sx={{ mb: 2 }} icon={<RefreshIcon />}>
+          加载中，如果长时间无响应，请检查后端服务是否正常运行
+        </Alert>
+      )}
 
       {/* 上游列表 */}
       <Card sx={{ mb: 3 }}>

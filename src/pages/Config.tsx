@@ -17,6 +17,7 @@ export default function Config() {
   const [snack, setSnack] = useState('')
 
   const load = async () => {
+    setError('')
     setLoading(true)
     try {
       const data = await api.getConfig()
@@ -30,6 +31,7 @@ export default function Config() {
   useEffect(() => { load() }, [])
 
   const handleReload = async () => {
+    setError('')
     try {
       await api.reload()
       setSnack('索引已重建')

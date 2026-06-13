@@ -81,6 +81,7 @@ export default function Requests() {
 
   const load = async (reqLimit?: number) => {
     const n = reqLimit ?? limit
+    setError('')
     setLoading(true)
     try {
       const res = await api.getRequests(n)
@@ -95,6 +96,7 @@ export default function Requests() {
 
   const loadMore = async () => {
     if (loadingMore || requests.length === 0) return
+    setError('')
     const oldest = requests[requests.length - 1]
     setLoadingMore(true)
     try {

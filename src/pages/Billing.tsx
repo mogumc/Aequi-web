@@ -44,6 +44,8 @@ export default function Billing() {
   const [keys, setKeys] = useState<BillingKey[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState('')
   const [createDialog, setCreateDialog] = useState(false)
   const [adjustDialog, setAdjustDialog] = useState<BillingKey | null>(null)
@@ -52,24 +54,35 @@ export default function Billing() {
   const [adjustMode, setAdjustMode] = useState<'add' | 'subtract'>('add')
   const [snack, setSnack] = useState('')
   const [overview, setOverview] = useState<BillingOverview | null>(null)
+  const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
+  const [levelForm, setLevelForm] = useState(0)
+  const [deleteConfirm, setDeleteConfirm] = useState<BillingKey | null>(null)
 
   const loadKeys = () => {
+    setError('')
     api.listBillingKeys().then(d => {
       setKeys(Array.isArray(d?.keys) ? d.keys : [])
     }).catch(() => {})
   }
 
   const reloadOverview = () => {
+    setError('')
     api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {})
   }
-  const [levelDialog, setLevelDialog] = useState<BillingKey | null>(null)
-  const [levelForm, setLevelForm] = useState(0)
-  const [deleteConfirm, setDeleteConfirm] = useState<BillingKey | null>(null)
 
   useEffect(() => {
-    loadKeys()
-    reloadOverview()
+    setPageLoading(true)
+    Promise.all([
+      api.listBillingKeys().then(d => { setKeys(Array.isArray(d?.keys) ? d.keys : []) }).catch(() => {}),
+      api.getBillingOverview().then(d => { if (d && 'billing' in d) setOverview(d) }).catch(() => {}),
+    ]).finally(() => setPageLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!pageLoading) { setLoadingSlow(false); return }
+    const t = setTimeout(() => setLoadingSlow(true), 4000)
+    return () => clearTimeout(t)
+  }, [pageLoading])
 
   const handleQuery = async () => {
     if (!query.trim()) return
@@ -95,6 +108,7 @@ export default function Billing() {
   }
 
   const handleCreate = async () => {
+    setError('')
     try {
       const balance = createForm.balance === '' ? 0 : Number(createForm.balance)
       await api.createBillingKey(createForm.key, balance)
@@ -113,6 +127,7 @@ export default function Billing() {
 
   const handleAdjust = async () => {
     if (!adjustDialog) return
+    setError('')
     const currentBalance = adjustDialog.balance ?? 0
     const delta = adjustMode === 'add' ? adjustDelta : -adjustDelta
     const newBalance = currentBalance + delta
@@ -137,6 +152,7 @@ export default function Billing() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    setError('')
     try {
       await api.deleteBillingKey(deleteConfirm.key)
       setKeys(prev => prev.filter(k => k.key !== deleteConfirm.key))
@@ -150,6 +166,7 @@ export default function Billing() {
 
   const handleSetLevel = async () => {
     if (!levelDialog) return
+    setError('')
     try {
       await api.setBillingKeyLevel(levelDialog.key, levelForm)
       setLevelDialog(null)
@@ -164,6 +181,11 @@ export default function Billing() {
   return (
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      {loadingSlow && (
+        <Alert severity="info" sx={{ mb: 2 }} icon={<RefreshIcon />}>
+          加载中，如果长时间无响应，请检查后端服务是否正常运行
+        </Alert>
+      )}
 
       {/* Overview */}
       <Box sx={{ mb: 3 }}>
@@ -236,14 +258,16 @@ export default function Billing() {
         </Grid>
 
         {/* Model costs */}
-        {overview && overview.model_costs.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Card>
-              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  模型倍率
-                  <Chip size="small" label={overview.model_costs.length} color="primary" variant="outlined" />
-                </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Card>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                模型倍率
+                {overview && <Chip size="small" label={overview.model_costs.length} color="primary" variant="outlined" />}
+              </Typography>
+              {pageLoading ? (
+                <Typography variant="body2" color="text.secondary">加载中...</Typography>
+              ) : overview && overview.model_costs.length > 0 ? (
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -262,20 +286,24 @@ export default function Billing() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
+              ) : (
+                <Typography variant="body2" color="text.secondary">暂无模型倍率配置</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
 
         {/* Upstreams */}
-        {overview && overview.upstreams.length > 0 && (
-          <Box>
-            <Card>
-              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  上游概览
-                  <Chip size="small" label={overview.upstreams.length} color="primary" variant="outlined" />
-                </Typography>
+        <Box sx={{ mb: 3 }}>
+          <Card>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                上游概览
+                {overview && <Chip size="small" label={overview.upstreams.length} color="primary" variant="outlined" />}
+              </Typography>
+              {pageLoading ? (
+                <Typography variant="body2" color="text.secondary">加载中...</Typography>
+              ) : overview && overview.upstreams.length > 0 ? (
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -300,10 +328,12 @@ export default function Billing() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
+              ) : (
+                <Typography variant="body2" color="text.secondary">暂无上游概览数据</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
       </Box>
 
       {/* Query + Keys */}

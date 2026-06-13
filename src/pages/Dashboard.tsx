@@ -82,6 +82,7 @@ export default function Dashboard() {
   const [buckets, setBuckets] = useState<MetricsBucket[]>([])
   const [metricWindow, setMetricWindow] = useState('1m')
   const [error, setError] = useState('')
+  const [loadingSlow, setLoadingSlow] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
 
@@ -138,6 +139,12 @@ export default function Dashboard() {
   }, [connectSSE])
 
   useEffect(() => {
+    if (!mountedRef.current) return
+    const t = setTimeout(() => { if (mountedRef.current) setLoadingSlow(true) }, 4000)
+    return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
     api.getMetrics(metricWindow).then(d => { if (mountedRef.current) setBuckets(d?.buckets ?? []) }).catch(() => {})
   }, [metricWindow])
 
@@ -150,7 +157,12 @@ export default function Dashboard() {
 
   return (
     <Box>
-      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      {loadingSlow && (
+        <Alert severity="info" sx={{ mb: 2 }} icon={<RefreshIcon />}>
+          加载中，如果长时间无响应，请检查后端服务是否正常运行
+        </Alert>
+      )}
 
       {/* Stats Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
