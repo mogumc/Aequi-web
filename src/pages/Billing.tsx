@@ -274,14 +274,16 @@ export default function Billing() {
                       <TableCell sx={{ py: 0.5 }}>模型</TableCell>
                       <TableCell sx={{ py: 0.5 }} align="right">输入倍率</TableCell>
                       <TableCell sx={{ py: 0.5 }} align="right">输出倍率</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">按次计费</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {overview.model_costs.map(m => (
                       <TableRow key={m.model}>
                         <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 13 }}>{m.model}</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">{m.input}</TableCell>
-                        <TableCell sx={{ py: 0.5 }} align="right">{m.output}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? '-' : m.input}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? '-' : m.output}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{m.per_request ? `${m.per_request} µcredit` : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

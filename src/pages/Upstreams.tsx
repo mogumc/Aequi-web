@@ -29,6 +29,7 @@ interface CostEntry {
   model: string
   input: number
   output: number
+  per_request?: number
 }
 
 const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'openai', proxy: '', model_map: '', min_key_level: 0 }
@@ -67,7 +68,7 @@ export default function Upstreams() {
   const [costsLoading, setCostsLoading] = useState(false)
   const [costDialog, setCostDialog] = useState(false)
   const [costEditing, setCostEditing] = useState<number | null>(null)
-  const [costForm, setCostForm] = useState<CostEntry>({ model: '', input: 0, output: 0 })
+  const [costForm, setCostForm] = useState<CostEntry>({ model: '', input: 0, output: 0, per_request: undefined })
 
   const load = async () => {
     setError('')
@@ -95,7 +96,7 @@ export default function Upstreams() {
       const entries: CostEntry[] = []
       if (data && typeof data === 'object') {
         for (const [model, c] of Object.entries(data)) {
-          if (c && typeof c === 'object') entries.push({ model, input: c.input ?? 0, output: c.output ?? 0 })
+          if (c && typeof c === 'object') entries.push({ model, input: c.input ?? 0, output: c.output ?? 0, per_request: c.per_request })
         }
       }
       setCosts(entries)
@@ -332,15 +333,26 @@ export default function Upstreams() {
   }
 
   // --- 模型倍率 ---
-  const openAddCost = () => { setCostEditing(null); setCostForm({ model: '', input: 0, output: 0 }); setCostDialog(true) }
+  const openAddCost = () => { setCostEditing(null); setCostForm({ model: '', input: 0, output: 0, per_request: undefined }); setCostDialog(true) }
   const openEditCost = (i: number) => { setCostEditing(i); setCostForm({ ...costs[i] }); setCostDialog(true) }
 
   const handleSaveCost = async () => {
     setError('')
     if (!costForm.model.trim()) { setError('请输入模型名称'); return }
-    const newCosts = costEditing !== null ? costs.map((c, i) => i === costEditing ? { ...costForm } : c) : [...costs, { ...costForm }]
+    const entry = { ...costForm }
+    if (entry.per_request && entry.per_request > 0) {
+      entry.input = 0
+      entry.output = 0
+    } else {
+      entry.per_request = undefined
+    }
+    const newCosts = costEditing !== null ? costs.map((c, i) => i === costEditing ? entry : c) : [...costs, entry]
     const payload: ModelCostsType = {}
-    for (const entry of newCosts) payload[entry.model] = { input: entry.input, output: entry.output }
+    for (const e of newCosts) {
+      payload[e.model] = e.per_request != null
+        ? { input: 0, output: 0, per_request: e.per_request }
+        : { input: e.input, output: e.output }
+    }
     try {
       await api.setModelCosts(payload)
       setSnack('模型倍率已保存')
@@ -353,7 +365,11 @@ export default function Upstreams() {
     setError('')
     const newCosts = costs.filter((_, idx) => idx !== i)
     const payload: ModelCostsType = {}
-    for (const entry of newCosts) payload[entry.model] = { input: entry.input, output: entry.output }
+    for (const e of newCosts) {
+      payload[e.model] = e.per_request != null
+        ? { input: 0, output: 0, per_request: e.per_request }
+        : { input: e.input, output: e.output }
+    }
     try {
       await api.setModelCosts(payload)
       setSnack('已删除')
@@ -612,7 +628,7 @@ export default function Upstreams() {
             </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            设置每个模型的输入/输出倍率，用于余额计算
+            设置每个模型的输入/输出倍率或按次计费，用于余额计算。按次计费优先级高于 Token 计算
           </Typography>
           <TableContainer>
             <Table size="small">
@@ -621,21 +637,23 @@ export default function Upstreams() {
                   <TableCell sx={{ fontWeight: 600 }}>模型名称</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>输入倍率</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>输出倍率</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>按次计费</TableCell>
                   <TableCell sx={{ fontWeight: 600 }} align="right">操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {costs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={5} align="center">
                       <Typography sx={{ color: 'text.secondary', py: 4 }}>暂无模型倍率配置</Typography>
                     </TableCell>
                   </TableRow>
                 ) : costs.map((c, i) => (
                   <TableRow key={c.model} hover>
                     <TableCell><Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{c.model}</Typography></TableCell>
-                    <TableCell>{c.input}</TableCell>
-                    <TableCell>{c.output}</TableCell>
+                    <TableCell>{c.per_request ? '-' : c.input}</TableCell>
+                    <TableCell>{c.per_request ? '-' : c.output}</TableCell>
+                    <TableCell>{c.per_request ? `${c.per_request} µcredit` : '-'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="编辑"><IconButton size="small" onClick={() => openEditCost(i)}><EditIcon fontSize="small" /></IconButton></Tooltip>
                       <Tooltip title="删除"><IconButton size="small" color="error" onClick={() => handleDeleteCost(i)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
@@ -803,13 +821,28 @@ export default function Upstreams() {
           <TextField fullWidth label="模型名称" value={costForm.model}
             onChange={e => setCostForm(f => ({ ...f, model: e.target.value }))}
             placeholder="gpt-4o" sx={{ mb: 2 }} disabled={costEditing !== null} helperText="唯一标识" />
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <TextField fullWidth label="输入倍率" type="number" value={costForm.input}
               slotProps={{ htmlInput: { min: 0, step: '0.1' } }}
-              onChange={e => setCostForm(f => ({ ...f, input: Number(e.target.value) || 0 }))} />
+              onChange={e => setCostForm(f => ({ ...f, input: Number(e.target.value) || 0 }))}
+              disabled={!!costForm.per_request} />
             <TextField fullWidth label="输出倍率" type="number" value={costForm.output}
               slotProps={{ htmlInput: { min: 0, step: '0.1' } }}
-              onChange={e => setCostForm(f => ({ ...f, output: Number(e.target.value) || 0 }))} />
+              onChange={e => setCostForm(f => ({ ...f, output: Number(e.target.value) || 0 }))}
+              disabled={!!costForm.per_request} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            <TextField fullWidth label="按次计费 (µcredit)" type="number" value={costForm.per_request ?? ''}
+              slotProps={{ htmlInput: { min: 0, step: '0.001' } }}
+              onChange={e => setCostForm(f => ({ ...f, per_request: e.target.value === '' ? undefined : Number(e.target.value), input: e.target.value !== '' ? 0 : f.input, output: e.target.value !== '' ? 0 : f.output }))}
+              placeholder="留空则使用 Token 计费"
+              helperText="设置后优先级高于 Token 倍率计算，每次请求固定扣费" />
+            <Button variant={costForm.per_request != null && costForm.per_request > 0 ? 'contained' : 'outlined'}
+              color="info"
+              onClick={() => setCostForm(f => f.per_request ? { ...f, per_request: undefined } : { ...f, per_request: 1, input: 0, output: 0 })}
+              sx={{ width: 56, height: 56, p: 0, minWidth: 56, mt: 0.5 }}>
+              $/次
+            </Button>
           </Box>
         </DialogContent>
         <DialogActions>

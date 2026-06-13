@@ -146,7 +146,7 @@ export interface Config {
   [key: string]: unknown
 }
 
-export type ModelCosts = Record<string, { input: number; output: number }>
+export type ModelCosts = Record<string, { input: number; output: number; per_request?: number }>
 
 export interface BillingOverview {
   billing: {
@@ -156,7 +156,7 @@ export interface BillingOverview {
     exhausted_keys: number
     total_balance: number
   }
-  model_costs: { model: string; input: number; output: number }[]
+  model_costs: { model: string; input: number; output: number; per_request?: number }[]
   usage: {
     tokens: number
     credits: number
