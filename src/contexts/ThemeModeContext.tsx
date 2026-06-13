@@ -12,7 +12,7 @@ interface ThemeModeContextType {
   cycleMode: () => void
 }
 
-const STORAGE_KEY = 'gptload_theme_mode'
+const STORAGE_KEY = 'aequi_theme_mode'
 
 function getStoredMode(): ThemeMode {
   try {

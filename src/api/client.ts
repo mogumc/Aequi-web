@@ -1,4 +1,4 @@
-// API client for gptload-rs admin API
+// API client for Aequi admin API
 
 const BASE = '/admin/api/v1'
 

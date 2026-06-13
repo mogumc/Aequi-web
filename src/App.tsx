@@ -77,7 +77,7 @@ export default function App() {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 2, pb: 1 }}>
         <Typography variant="h6" sx={{ fontWeight: 700 }} color="primary">
-          GPTLoad RS
+          Aequi AI
         </Typography>
         <Typography variant="caption" color="text.secondary">
           负载均衡管理面板
