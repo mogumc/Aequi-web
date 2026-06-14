@@ -130,7 +130,7 @@ export default function Dashboard() {
   useEffect(() => {
     mountedRef.current = true
     connectSSE()
-    api.getStats().then(d => { if (mountedRef.current) setStats(d) }).catch(() => {})
+    api.getStats().then(d => { if (mountedRef.current) { setStats(d); setLoadingSlow(false) } }).catch(() => {})
     api.getMetrics(metricWindow).then(d => { if (mountedRef.current) setBuckets(d?.buckets ?? []) }).catch(() => {})
     return () => {
       mountedRef.current = false
@@ -139,10 +139,11 @@ export default function Dashboard() {
   }, [connectSSE])
 
   useEffect(() => {
+    if (stats) { setLoadingSlow(false); return }
     if (!mountedRef.current) return
-    const t = setTimeout(() => { if (mountedRef.current) setLoadingSlow(true) }, 4000)
+    const t = setTimeout(() => { if (mountedRef.current && !stats) setLoadingSlow(true) }, 4000)
     return () => clearTimeout(t)
-  }, [])
+  }, [stats])
 
   useEffect(() => {
     api.getMetrics(metricWindow).then(d => { if (mountedRef.current) setBuckets(d?.buckets ?? []) }).catch(() => {})

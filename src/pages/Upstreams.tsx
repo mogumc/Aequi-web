@@ -277,12 +277,13 @@ export default function Upstreams() {
     setRefreshing(false)
   }
 
-  const applyToRoutes = () => {
+  const saveModelRoutes = async () => {
     if (!selectedUpstream) return
-    const newUpstreams = { ...(routes?.upstreams || {}) }
-    newUpstreams[selectedUpstream] = checkedModels
-    setRoutes(prev => {
-      if (!prev) return prev
+    setError('')
+    setSaving(true)
+    try {
+      const newUpstreams = { ...(routes?.upstreams || {}) }
+      newUpstreams[selectedUpstream] = checkedModels
       const newModels: Record<string, string[]> = {}
       for (const [upId, modelList] of Object.entries(newUpstreams)) {
         for (const model of modelList) {
@@ -293,32 +294,14 @@ export default function Upstreams() {
       for (const k of Object.keys(newModels)) {
         newModels[k] = Array.from(new Set(newModels[k])).sort()
       }
-      return {
-        ...prev,
-        updated_at_ms: Date.now(),
-        models: newModels,
-        upstreams: newUpstreams,
-      }
-    })
-    setSnack('已应用到路由配置，点击保存生效')
-  }
-
-  const saveRoutes = async () => {
-    if (!routes?.upstreams) return
-    setError('')
-    setSaving(true)
-    try {
-      const res = await api.updateModelRoutes({ upstreams: routes.upstreams })
+      const res = await api.updateModelRoutes({ upstreams: newUpstreams })
       setRoutes(res)
-      setSnack('路由保存成功')
+      setSnack('路由已保存')
     } catch (e: any) {
       setError(e?.message ?? '保存失败')
     }
     setSaving(false)
   }
-
-  const selectAll = () => setCheckedModels([...availableModels])
-  const selectNone = () => setCheckedModels([])
 
   const toggleModel = (model: string) => {
     setCheckedModels(prev =>
@@ -330,6 +313,7 @@ export default function Upstreams() {
     setSelectedUpstream(upstreamId)
     setAvailableModels([])
     setCheckedModels([])
+    setModelSearch('')
   }
 
   // --- 模型倍率 ---
@@ -471,22 +455,11 @@ export default function Upstreams() {
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">模型映射</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button startIcon={<RefreshIcon />} onClick={loadRoutes} disabled={loading}>刷新</Button>
-              <Button
-                startIcon={<SaveIcon />}
-                onClick={saveRoutes}
-                disabled={saving || !routes?.upstreams}
-                variant="contained"
-                color="primary"
-              >
-                保存路由
-              </Button>
-            </Box>
+            <Button startIcon={<RefreshIcon />} onClick={loadRoutes} disabled={loading}>刷新</Button>
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            选择上游，刷新模型列表，勾选要映射的模型，应用后保存生效
+            选择上游，刷新模型列表，勾选要映射的模型后保存；搜索框中可输入新模型名称直接添加
           </Typography>
 
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
@@ -522,29 +495,52 @@ export default function Upstreams() {
                   可用模型 ({checkedModels.length}/{availableModels.length})
                 </Typography>
                 <TextField
-                  size="small" placeholder="搜索模型…"
-                  value={modelSearch} onChange={e => setModelSearch(e.target.value)}
+                  size="small" placeholder="搜索或输入新模型名称…"
+                  value={modelSearch}
+                  onChange={e => {
+                    const val = e.target.value
+                    setModelSearch(val)
+                    const name = val.trim()
+                    if (name && !availableModels.includes(name)) {
+                      setAvailableModels(prev => [...prev, name])
+                      setCheckedModels(prev => [...prev, name])
+                    }
+                  }}
                   slotProps={{
                     input: {
                       startAdornment: <SearchIcon sx={{ mr: 0.5, color: 'text.secondary', fontSize: 20 }} />,
                       sx: { fontSize: 13 },
                     },
                   }}
-                  sx={{ minWidth: 180, maxWidth: 300 }}
+                  sx={{ minWidth: 200, maxWidth: 300 }}
                 />
-                <Button size="small" onClick={checkedModels.length === availableModels.length ? selectNone : selectAll}>
-                  {checkedModels.length === availableModels.length ? '全不选' : '全选'}
+                <Button size="small" onClick={() => {
+                  const search = modelSearch.trim().toLowerCase()
+                  const visible = search ? availableModels.filter(m => m.toLowerCase().includes(search)) : availableModels
+                  const allChecked = visible.every(m => checkedModels.includes(m))
+                  setCheckedModels(prev => {
+                    if (allChecked) return prev.filter(m => !visible.includes(m))
+                    return [...new Set([...prev, ...visible])]
+                  })
+                }}>
+                  {(() => {
+                    const search = modelSearch.trim().toLowerCase()
+                    const visible = search ? availableModels.filter(m => m.toLowerCase().includes(search)) : availableModels
+                    return visible.every(m => checkedModels.includes(m)) && visible.length > 0 ? '全不选' : '全选'
+                  })()}
                 </Button>
-                <Button size="small" onClick={() => { setAvailableModels([]); setCheckedModels([]) }}>
+                <Button size="small" onClick={() => { setAvailableModels([]); setCheckedModels([]); setModelSearch('') }}>
                   关闭
                 </Button>
                 <Button
                   size="small"
-                  variant="outlined"
-                  onClick={applyToRoutes}
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={saveModelRoutes}
+                  disabled={!selectedUpstream || saving}
                   sx={{ ml: 'auto' }}
                 >
-                  应用到路由
+                  保存路由
                 </Button>
               </Box>
               <Box sx={{
@@ -552,25 +548,47 @@ export default function Upstreams() {
                 maxHeight: 300, overflow: 'auto',
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 0.5,
               }}>
-                {availableModels
-                  .filter(m => !modelSearch.trim() || m.toLowerCase().includes(modelSearch.trim().toLowerCase()))
-                  .map(model => (
-                  <Box
-                    key={model}
-                    sx={{
-                      display: 'flex', alignItems: 'center', px: 1, py: 0.25, borderRadius: 0.5,
-                      '&:hover': { bgcolor: 'action.hover' },
-                    }}
-                  >
-                    <Checkbox size="small" checked={checkedModels.includes(model)} onChange={() => toggleModel(model)} />
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 13 }}>{model}</Typography>
-                  </Box>
-                ))}
-                {modelSearch.trim() && availableModels.filter(m => m.toLowerCase().includes(modelSearch.trim().toLowerCase())).length === 0 && (
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, gridColumn: '1 / -1', textAlign: 'center' }}>
-                    无匹配模型
-                  </Typography>
-                )}
+                {(() => {
+                  const search = modelSearch.trim()
+                  const searchLower = search.toLowerCase()
+                  const matches = search
+                    ? availableModels.filter(m => m.toLowerCase().includes(searchLower))
+                    : availableModels
+                  const isNewModel = search && !availableModels.some(m => m.toLowerCase() === searchLower)
+                  return (
+                    <>
+                      {matches.map(model => (
+                        <Box
+                          key={model}
+                          sx={{
+                            display: 'flex', alignItems: 'center', px: 1, py: 0.25, borderRadius: 0.5,
+                            '&:hover': { bgcolor: 'action.hover' },
+                          }}
+                        >
+                          <Checkbox size="small" checked={checkedModels.includes(model)} onChange={() => toggleModel(model)} />
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 13 }}>{model}</Typography>
+                        </Box>
+                      ))}
+                      {isNewModel && (
+                        <Box
+                          sx={{
+                            display: 'flex', alignItems: 'center', px: 1, py: 0.25, borderRadius: 0.5,
+                            bgcolor: 'action.selected',
+                          }}
+                        >
+                          <Checkbox size="small" checked disabled />
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 13 }}>{search}</Typography>
+                          <Chip size="small" label="新增" color="success" sx={{ ml: 0.5, height: 18, fontSize: 11 }} />
+                        </Box>
+                      )}
+                      {search && matches.length === 0 && !isNewModel && (
+                        <Typography variant="body2" color="text.secondary" sx={{ py: 2, gridColumn: '1 / -1', textAlign: 'center' }}>
+                          无匹配模型
+                        </Typography>
+                      )}
+                    </>
+                  )
+                })()}
               </Box>
             </Box>
           )}

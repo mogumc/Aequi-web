@@ -9,6 +9,11 @@ import App from './App'
 import { ThemeModeProvider } from './contexts/ThemeModeContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
+const { pathname, search, hash } = window.location
+if (pathname.length > 1 && !pathname.endsWith('/') && hash) {
+  window.location.replace(pathname + '/' + search + hash)
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <HashRouter>
