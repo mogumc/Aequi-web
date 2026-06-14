@@ -91,6 +91,7 @@ export interface Upstream {
   max_concurrent_per_key: number | null
   model_map: Record<string, string> | null
   min_key_level: number | null
+  custom_headers?: Record<string, string | null>
   keys_total: number
   keys_active: number
   keys_invalid: number
@@ -196,7 +197,7 @@ export const api = {
 
   // Upstreams
   getUpstreams: () => request<Upstream[]>('/upstreams'),
-  createUpstream: (data: { id: string; base_url: string; weight?: number; format?: string; proxy?: string; model_map?: Record<string, string>; min_key_level?: number }) =>
+  createUpstream: (data: { id: string; base_url: string; weight?: number; format?: string; proxy?: string; model_map?: Record<string, string>; min_key_level?: number; custom_headers?: Record<string, string | null> }) =>
     request<{ ok: boolean; upstreams: number }>('/upstreams', { method: 'POST', body: JSON.stringify(data) }),
   updateUpstream: (id: string, data: Partial<Upstream>) =>
     request<{ ok: boolean }>(`/upstreams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

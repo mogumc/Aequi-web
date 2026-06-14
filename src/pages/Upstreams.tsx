@@ -23,6 +23,7 @@ interface UpstreamForm {
   proxy: string
   model_map: string // JSON string for key-value pairs
   min_key_level: number
+  custom_headers: string // JSON string for header overrides
 }
 
 interface CostEntry {
@@ -32,7 +33,7 @@ interface CostEntry {
   per_request?: number
 }
 
-const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'openai', proxy: '', model_map: '', min_key_level: 0 }
+const emptyForm: UpstreamForm = { id: '', base_url: '', weight: 1, format: 'openai', proxy: '', model_map: '', min_key_level: 0, custom_headers: '' }
 
 export default function Upstreams() {
   const [upstreams, setUpstreams] = useState<Upstream[]>([])
@@ -124,6 +125,22 @@ export default function Upstreams() {
         return
       }
     }
+    let parsedHeaders: Record<string, string | null> | undefined
+    if (form.custom_headers.trim()) {
+      try {
+        parsedHeaders = JSON.parse(form.custom_headers)
+        if (typeof parsedHeaders !== 'object' || Array.isArray(parsedHeaders)) throw new Error()
+        for (const [k, v] of Object.entries(parsedHeaders)) {
+          if (v !== null && typeof v !== 'string') {
+            setError(`自定义 Header "${k}" 的值必须是字符串或 null`)
+            return
+          }
+        }
+      } catch {
+        setError('自定义 Header JSON 格式无效')
+        return
+      }
+    }
     try {
       if (editing) {
         await api.updateUpstream(editing, {
@@ -133,6 +150,7 @@ export default function Upstreams() {
           proxy: form.proxy || undefined,
           model_map: parsedModelMap ?? null,
           min_key_level: form.min_key_level || undefined,
+          custom_headers: parsedHeaders ?? null,
         } as any)
         setSnack('上游已更新')
       } else {
@@ -144,6 +162,7 @@ export default function Upstreams() {
           proxy: form.proxy || undefined,
           model_map: parsedModelMap,
           min_key_level: form.min_key_level || undefined,
+          custom_headers: parsedHeaders,
         })
         setSnack('上游已创建')
       }
@@ -175,6 +194,7 @@ export default function Upstreams() {
       id: u.id, base_url: u.base_url, weight: u.weight, format: u.format, proxy: u.proxy ?? '',
       model_map: u.model_map ? JSON.stringify(u.model_map, null, 2) : '',
       min_key_level: u.min_key_level ?? 0,
+      custom_headers: u.custom_headers ? JSON.stringify(u.custom_headers, null, 2) : '',
     })
     setEditing(u.id)
     setDialog(true)
@@ -488,7 +508,7 @@ export default function Upstreams() {
             </Button>
           </Box>
 
-          {availableModels.length > 0 && (
+          {selectedUpstream && (
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography variant="subtitle2" sx={{ mr: 1 }}>
@@ -498,13 +518,7 @@ export default function Upstreams() {
                   size="small" placeholder="搜索或输入新模型名称…"
                   value={modelSearch}
                   onChange={e => {
-                    const val = e.target.value
-                    setModelSearch(val)
-                    const name = val.trim()
-                    if (name && !availableModels.includes(name)) {
-                      setAvailableModels(prev => [...prev, name])
-                      setCheckedModels(prev => [...prev, name])
-                    }
+                    setModelSearch(e.target.value)
                   }}
                   slotProps={{
                     input: {
@@ -573,10 +587,11 @@ export default function Upstreams() {
                         <Box
                           sx={{
                             display: 'flex', alignItems: 'center', px: 1, py: 0.25, borderRadius: 0.5,
-                            bgcolor: 'action.selected',
+                            bgcolor: checkedModels.includes(search) ? 'action.selected' : 'transparent',
+                            '&:hover': { bgcolor: 'action.hover' },
                           }}
                         >
-                          <Checkbox size="small" checked disabled />
+                          <Checkbox size="small" checked={checkedModels.includes(search)} onChange={() => toggleModel(search)} />
                           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 13 }}>{search}</Typography>
                           <Chip size="small" label="新增" color="success" sx={{ ml: 0.5, height: 18, fontSize: 11 }} />
                         </Box>
@@ -714,6 +729,11 @@ export default function Upstreams() {
             placeholder='{"gpt-4o": "deepseek-chat"}'
             helperText="JSON 格式，将请求中的模型名映射到目标模型" multiline minRows={2} maxRows={6}
             sx={{ fontFamily: 'monospace' }} />
+          <TextField fullWidth label="自定义 Header (可选)" value={form.custom_headers}
+            onChange={e => setForm(f => ({ ...f, custom_headers: e.target.value }))}
+            placeholder='{"X-Custom": "value", "Delete-Me": null}'
+            helperText='JSON 格式，字符串值 = 设置/替换，null = 删除。不允许覆盖认证头' multiline minRows={2} maxRows={6}
+            sx={{ mt: 2, fontFamily: 'monospace' }} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialog(false)}>取消</Button>
