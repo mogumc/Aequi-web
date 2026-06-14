@@ -139,8 +139,21 @@ export interface ModelRoutesResponse {
 export interface BillingKey {
   key: string
   balance: number
-  created_at?: string
+  balance_micro?: number
   level?: number
+  usage?: { tokens: number; credits: number }
+}
+
+export interface AdjustBalanceResult {
+  key: string
+  delta: number
+  balance: number
+}
+
+export interface CreateBillingKeyResult {
+  key: string
+  balance: number
+  created: boolean
 }
 
 export interface Config {
@@ -173,7 +186,8 @@ export interface BillingOverview {
     active_keys: number
     format: string
     min_key_level: number
-    model_map: string[]
+    weight: number
+    requests: number
   }[]
   requests_total: number
   requests_inflight: number
@@ -259,11 +273,11 @@ export const api = {
   listBillingKeys: () =>
     request<{ keys: BillingKey[] }>('/billing/keys'),
   createBillingKey: (key: string, balance: number) =>
-    request<BillingKey>('/billing/keys', { method: 'POST', body: JSON.stringify({ key, balance }) }),
+    request<CreateBillingKeyResult>('/billing/keys', { method: 'POST', body: JSON.stringify({ key, balance }) }),
   getBillingKey: (key: string) =>
     request<BillingKey>(`/billing/${key}`),
   adjustBalance: (key: string, delta: number) =>
-    request<BillingKey>(`/billing/${key}/adjust`, {
+    request<AdjustBalanceResult>(`/billing/${key}/adjust`, {
       method: 'POST',
       body: JSON.stringify({ delta }),
     }),
@@ -285,5 +299,5 @@ export const api = {
   setBillingKeyLevel: (key: string, level: number) =>
     request<{ ok: boolean }>(`/billing/${key}/level`, { method: 'POST', body: JSON.stringify({ level }) }),
   getBillingKeyLevel: (key: string) =>
-    request<{ key: string; level: number }>(`/billing/${key}/level`),
+    request<BillingKey>(`/billing/${key}/level`),
 }

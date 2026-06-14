@@ -138,7 +138,7 @@ export default function Billing() {
     try {
       const result = await api.adjustBalance(adjustDialog.key, delta)
       if (result && typeof result === 'object' && result.key) {
-        setKeys(prev => prev.map(k => k.key === result.key ? result : k))
+        setKeys(prev => prev.map(k => k.key === result.key ? { ...k, balance: result.balance } : k))
       }
       setAdjustDialog(null)
       setAdjustDelta(0.001)
@@ -312,7 +312,8 @@ export default function Billing() {
                       <TableCell sx={{ py: 0.5 }}>上游</TableCell>
                       <TableCell sx={{ py: 0.5 }} align="right">密钥</TableCell>
                       <TableCell sx={{ py: 0.5 }}>最低等级</TableCell>
-                      <TableCell sx={{ py: 0.5 }}>重定向</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">权重</TableCell>
+                      <TableCell sx={{ py: 0.5 }} align="right">请求</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -323,9 +324,8 @@ export default function Billing() {
                         <TableCell sx={{ py: 0.5 }}>
                           <Chip size="small" label={u.min_key_level != null && u.min_key_level >= 0 ? `Lv.${u.min_key_level}` : '无限制'} variant="outlined" />
                         </TableCell>
-                        <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 12 }}>
-                          {u.model_map.length > 0 ? JSON.stringify(u.model_map) : '-'}
-                        </TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{u.weight}</TableCell>
+                        <TableCell sx={{ py: 0.5 }} align="right">{u.requests}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -371,7 +371,7 @@ export default function Billing() {
                     </TableCell>
                   </TableRow>
                 ) : keys.map(k => {
-                  const usage = overview?.key_usage?.find(u => u.key === k.key)
+                  const usage = k.usage ?? overview?.key_usage?.find(u => u.key === k.key)
                   return (
                   <TableRow key={k.key} hover>
                     <TableCell sx={{ maxWidth: 200 }}>
