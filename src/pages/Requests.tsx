@@ -55,8 +55,7 @@ interface RequestItem {
   total_tokens: number | null
   req_bytes: number
   resp_bytes: number
-  request_headers?: unknown
-  request_body?: unknown
+  error?: string | null
   timing?: {
     queue_ms: number
     upstream_ms: number
@@ -342,6 +341,12 @@ export default function Requests() {
                       ) : '-'}
                     </TableCell>
                   </TableRow>
+                  {selected.error && (
+                    <TableRow>
+                      <TableCell sx={{ color: 'error.main', borderTop: '1px solid', borderColor: 'divider' }}>错误</TableCell>
+                      <TableCell colSpan={3} sx={{ color: 'error.main', borderTop: '1px solid', borderColor: 'divider', wordBreak: 'break-all', maxWidth: 400 }}>{selected.error}</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             )}

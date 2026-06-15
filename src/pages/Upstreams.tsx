@@ -286,11 +286,16 @@ export default function Upstreams() {
     setRefreshing(true)
     try {
       const res = await api.refreshModels(selectedUpstream)
-      const models = res?.models || []
-      setAvailableModels(models)
+      const upstreamModels = res?.models || []
       const currentRouted = routes?.upstreams?.[selectedUpstream] || []
-      setCheckedModels(models.filter(m => currentRouted.includes(m)))
-      setSnack(`刷新成功，发现 ${models.length} 个模型`)
+
+      // 合并上游返回的模型与路由中已有的模型（保留不在上游返回但存在于路由的模型）
+      const merged = [...new Set([...upstreamModels, ...currentRouted])]
+
+      setAvailableModels(merged)
+      // 刷新后自动勾选路由中已有的模型
+      setCheckedModels([...new Set(merged.filter(m => currentRouted.includes(m)))])
+      setSnack(`刷新成功，发现 ${upstreamModels.length} 个模型${currentRouted.length > 0 ? `，保留 ${currentRouted.length} 个已路由模型` : ''}`)
     } catch (e: any) {
       setError(e?.message ?? '刷新模型失败')
     }
@@ -331,9 +336,11 @@ export default function Upstreams() {
 
   const handleUpstreamChange = (upstreamId: string) => {
     setSelectedUpstream(upstreamId)
-    setAvailableModels([])
-    setCheckedModels([])
     setModelSearch('')
+    // 选中上游时，自动从已有路由映射中加载该上游的模型到可用模型列表
+    const currentRouted = routes?.upstreams?.[upstreamId] || []
+    setAvailableModels([...currentRouted])
+    setCheckedModels([...currentRouted])
   }
 
   // --- 模型倍率 ---
