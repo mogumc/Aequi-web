@@ -550,7 +550,12 @@ export default function Upstreams() {
                     return visible.every(m => checkedModels.includes(m)) && visible.length > 0 ? '全不选' : '全选'
                   })()}
                 </Button>
-                <Button size="small" onClick={() => { setAvailableModels([]); setCheckedModels([]); setModelSearch('') }}>
+                <Button size="small" onClick={() => {
+                  const currentRouted = routes?.upstreams?.[selectedUpstream] || []
+                  setAvailableModels([...currentRouted])
+                  setCheckedModels([...currentRouted])
+                  setModelSearch('')
+                }}>
                   关闭
                 </Button>
                 <Button
