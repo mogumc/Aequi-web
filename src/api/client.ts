@@ -51,8 +51,6 @@ export interface UpstreamStats {
   responses_3xx: number
   responses_4xx: number
   responses_5xx: number
-  errors_timeout: number
-  errors_network: number
 }
 
 export interface Stats {
@@ -68,8 +66,6 @@ export interface Stats {
   responses_3xx: number
   responses_4xx: number
   responses_5xx: number
-  errors_timeout: number
-  errors_network: number
   latency_avg_ms: number
   latency_max_ms: number
   latency_count?: number
@@ -101,8 +97,6 @@ export interface Upstream {
   responses_3xx: number
   responses_4xx: number
   responses_5xx: number
-  errors_timeout: number
-  errors_network: number
 }
 
 export interface KeyItem {

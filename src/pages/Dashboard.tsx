@@ -149,7 +149,7 @@ export default function Dashboard() {
     api.getMetrics(metricWindow).then(d => { if (mountedRef.current) setBuckets(d?.buckets ?? []) }).catch(() => {})
   }, [metricWindow])
 
-  const totalErrors = (stats?.errors_network ?? 0) + (stats?.errors_timeout ?? 0)
+  const totalErrors = (stats?.responses_3xx ?? 0) + (stats?.responses_4xx ?? 0) + (stats?.responses_5xx ?? 0)
   const successRate = (stats?.requests_total ?? 0) > 0
     ? (((stats?.responses_2xx ?? 0) / (stats?.requests_total ?? 1)) * 100).toFixed(1)
     : '0.0'
@@ -209,7 +209,6 @@ export default function Dashboard() {
                     <TableCell>请求数</TableCell>
                     <TableCell>2xx</TableCell>
                     <TableCell>4xx/5xx</TableCell>
-                    <TableCell>错误</TableCell>
                     <TableCell>密钥</TableCell>
                     <TableCell>负载</TableCell>
                   </TableRow>
@@ -226,7 +225,6 @@ export default function Dashboard() {
                           <Chip size="small" label={`${us.responses_4xx ?? 0}/${us.responses_5xx ?? 0}`}
                             color={(us.responses_5xx ?? 0) > 0 ? 'error' : 'default'} variant="outlined" />
                         </TableCell>
-                        <TableCell>{(us.errors_network ?? 0) + (us.errors_timeout ?? 0)}</TableCell>
                         <TableCell>
                           <Tooltip title={`${us.keys_invalid ?? 0} 无效`}>
                             <span>{us.keys_active ?? 0}/{us.keys_total ?? 0}</span>
