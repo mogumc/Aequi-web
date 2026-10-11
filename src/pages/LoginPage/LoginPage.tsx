@@ -29,10 +29,10 @@ import {
  */
 type Page = 'admin' | 'key';
 
-const PAGE_LABELS: Record<Page, string> = {
-  admin: '管理员',
-  key: '访问密钥',
-};
+const PAGES = [
+  { id: 'admin', label: '管理员' },
+  { id: 'key', label: '访问密钥' },
+] as const;
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -151,129 +151,132 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card p-6 shadow-xs md:p-8">
-          {page === 'admin' ? (
-            <form onSubmit={onAdminLogin} className="space-y-5" noValidate>
-              <div className="space-y-2">
-                <Label htmlFor="username">用户名</Label>
-                <Input
-                  id="username"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="h-12 rounded-lg"
-                  placeholder="管理员用户名"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 rounded-lg"
-                  placeholder="管理员密码"
-                  required
-                />
-              </div>
-              {needOtp && (
+        <div className="rounded-2xl bg-card shadow-xs">
+          {/* 身份切换固定在卡片顶部：它不该跟着下面的表单内容上下移动 */}
+          <div className="grid grid-cols-2 gap-1 border-b border-border/40 p-2">
+            {PAGES.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => switchPage(item.id)}
+                className={`rounded-xl px-4 py-2.5 text-sm transition-colors ${
+                  page === item.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {index + 1} · {item.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 只有这一块随选择变化；给个最小高度，免得卡片高度来回跳 */}
+          <div className="flex min-h-[248px] flex-col justify-center p-6 md:p-8">
+            {page === 'admin' ? (
+              <form onSubmit={onAdminLogin} className="space-y-5" noValidate>
                 <div className="space-y-2">
-                  <Label htmlFor="otp">两步验证码</Label>
+                  <Label htmlFor="username">用户名</Label>
                   <Input
-                    id="otp"
-                    inputMode="numeric"
-                    autoFocus
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    className={`h-12 rounded-lg font-mono tracking-[0.3em] ${
-                      otpInvalid ? 'ring-2 ring-destructive' : ''
-                    }`}
-                    placeholder="6 位验证码"
-                    maxLength={6}
+                    id="username"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="h-12 rounded-lg"
+                    placeholder="管理员用户名"
+                    required
                   />
                 </div>
-              )}
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button
-                type="submit"
-                disabled={submitting || !username || !password || (needOtp && !otp)}
-                className="h-12 w-full rounded-full text-base"
-              >
-                {submitting ? '登录中…' : '登录'}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={onKeyLogin} className="space-y-5" noValidate>
-              <div className="space-y-2">
-                <Label htmlFor="access-key">访问密钥</Label>
-                <Input
-                  id="access-key"
-                  type="password"
-                  autoComplete="off"
-                  value={accessKey}
-                  onChange={(e) => setAccessKeyInput(e.target.value)}
-                  className="h-12 rounded-lg font-mono"
-                  placeholder="粘贴你的 API 密钥"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  密钥由管理员发放；登录后只能看到这把密钥自己的余额与用量。
-                </p>
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button
-                type="submit"
-                disabled={submitting || !accessKey.trim()}
-                className="h-12 w-full rounded-full text-base"
-              >
-                {submitting ? '校验中…' : '进入'}
-              </Button>
-            </form>
-          )}
+                <div className="space-y-2">
+                  <Label htmlFor="password">密码</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 rounded-lg"
+                    placeholder="管理员密码"
+                    required
+                  />
+                </div>
+                {needOtp && (
+                  <div className="space-y-2">
+                    <Label htmlFor="otp">两步验证码</Label>
+                    <Input
+                      id="otp"
+                      inputMode="numeric"
+                      autoFocus
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      className={`h-12 rounded-lg font-mono tracking-[0.3em] ${
+                        otpInvalid ? 'ring-2 ring-destructive' : ''
+                      }`}
+                      placeholder="6 位验证码"
+                      maxLength={6}
+                    />
+                  </div>
+                )}
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button
+                  type="submit"
+                  disabled={submitting || !username || !password || (needOtp && !otp)}
+                  className="h-12 w-full rounded-full text-base"
+                >
+                  {submitting ? '登录中…' : '登录'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={onKeyLogin} className="space-y-5" noValidate>
+                <div className="space-y-2">
+                  <Label htmlFor="access-key">访问密钥</Label>
+                  <Input
+                    id="access-key"
+                    type="password"
+                    autoComplete="off"
+                    value={accessKey}
+                    onChange={(e) => setAccessKeyInput(e.target.value)}
+                    className="h-12 rounded-lg font-mono"
+                    placeholder="粘贴你的 API 密钥"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    密钥由管理员发放；登录后只能看到这把密钥自己的余额与用量。
+                  </p>
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button
+                  type="submit"
+                  disabled={submitting || !accessKey.trim()}
+                  className="h-12 w-full rounded-full text-base"
+                >
+                  {submitting ? '校验中…' : '进入'}
+                </Button>
+              </form>
+            )}
 
-          {providers.length > 0 && (
-            <>
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-border/40" />
-                <span className="text-xs text-muted-foreground">或</span>
-                <div className="h-px flex-1 bg-border/40" />
+            {providers.length > 0 && (
+              <div className="mt-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border/40" />
+                  <span className="text-xs text-muted-foreground">或</span>
+                  <div className="h-px flex-1 bg-border/40" />
+                </div>
+                <div className="space-y-2">
+                  {providers.map((provider) => (
+                    <Button
+                      key={provider.id}
+                      type="button"
+                      variant="secondary"
+                      className="h-11 w-full rounded-full"
+                      onClick={() => toast.info(`${provider.label} 登录尚未开放`)}
+                    >
+                      {provider.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {providers.map((provider) => (
-                  <Button
-                    key={provider.id}
-                    type="button"
-                    variant="secondary"
-                    className="h-11 w-full rounded-full"
-                    onClick={() => toast.info(`${provider.label} 登录尚未开放`)}
-                  >
-                    {provider.label}
-                  </Button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* 分页：两页对应两种登录身份 */}
-        <div className="flex items-center justify-center gap-2">
-          {(['admin', 'key'] as const).map((item, index) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => switchPage(item)}
-              className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-                page === item
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-card'
-              }`}
-            >
-              {index + 1}·{PAGE_LABELS[item]}
-            </button>
-          ))}
+            )}
+          </div>
         </div>
 
         <Toaster position="top-center" richColors />
