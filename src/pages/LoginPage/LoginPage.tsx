@@ -30,7 +30,7 @@ import {
 type Page = 'admin' | 'key';
 
 const PAGES = [
-  { id: 'admin', label: '管理员' },
+  { id: 'admin', label: '管理面板' },
   { id: 'key', label: '访问密钥' },
 ] as const;
 
@@ -133,7 +133,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen justify-center bg-background p-4 pt-16 sm:pt-24">
       <div className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
@@ -146,7 +146,7 @@ export default function LoginPage() {
           <div>
             <h1 className="text-2xl font-medium tracking-tight">Aequi 控制台</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {page === 'admin' ? 'API 网关管理面板' : '查看自己的余额与用量'}
+              {page === 'admin' ? '网关管理面板' : '密钥查询用量'}
             </p>
           </div>
         </div>
@@ -154,7 +154,7 @@ export default function LoginPage() {
         <div className="rounded-2xl bg-card shadow-xs">
           {/* 身份切换固定在卡片顶部：它不该跟着下面的表单内容上下移动 */}
           <div className="grid grid-cols-2 gap-1 border-b border-border/40 p-2">
-            {PAGES.map((item, index) => (
+            {PAGES.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -165,13 +165,13 @@ export default function LoginPage() {
                     : 'text-muted-foreground hover:bg-muted'
                 }`}
               >
-                {index + 1} · {item.label}
+                {item.label}
               </button>
             ))}
           </div>
 
-          {/* 只有这一块随选择变化；给个最小高度，免得卡片高度来回跳 */}
-          <div className="flex min-h-[248px] flex-col justify-center p-6 md:p-8">
+          {/* 内容区高度固定：两页内容量不同，定高之后切换时卡片外框不动 */}
+          <div className="flex h-[272px] flex-col justify-center p-6 md:p-8">
             {page === 'admin' ? (
               <form onSubmit={onAdminLogin} className="space-y-5" noValidate>
                 <div className="space-y-2">
@@ -235,7 +235,7 @@ export default function LoginPage() {
                     autoComplete="off"
                     value={accessKey}
                     onChange={(e) => setAccessKeyInput(e.target.value)}
-                    className="h-12 rounded-lg font-mono"
+                    className="h-12 rounded-lg"
                     placeholder="粘贴你的 API 密钥"
                     required
                   />
