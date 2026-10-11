@@ -10,6 +10,8 @@ import type {
   IKeySelf,
   IKeyUsage,
   ILoginResponse,
+  IModel,
+  IModelListResponse,
   IOtpStatus,
   IProvider,
   IRequestLog,
@@ -292,4 +294,19 @@ export const api = {
     const res = await request<{ logs: IRequestLog[] }>(`/api/logs?limit=${limit}`);
     return res.logs;
   },
+
+  // ---- 模型计费配置 ----
+  listModels: async () => {
+    const res = await request<IModelListResponse>('/api/models');
+    return res.models;
+  },
+  createModel: (body: { name: string; multiplier?: string }) =>
+    request<IModel>('/api/models', { method: 'POST', body: JSON.stringify(body) }),
+  updateModel: (name: string, patch: { multiplier?: string; enabled?: boolean }) =>
+    request<IModel>(`/api/models/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  deleteModel: (name: string) =>
+    request<void>(`/api/models/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 };

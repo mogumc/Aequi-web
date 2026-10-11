@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
-import { Copy, KeyRound, Plus, Search } from 'lucide-react';
+import { Copy, Eye, EyeOff, KeyRound, Plus, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -46,15 +47,53 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { IAccessKey } from '@/data/admin';
+import type { IAccessKey, IModel } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits, formatDateTime } from '@/lib/format';
-function parseModels(text: string): string[] | null {
-  const list = text
-    .split(/[,，\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return list.length > 0 ? list : null;
+
+/** 从已配置的模型里多选；一个都不选表示不限制。 */
+function ModelPicker({
+  models,
+  selected,
+  onChange,
+}: {
+  models: IModel[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  // 已在白名单里、但还没建模型配置的名字（块里配过就能用）也要列出来，
+  // 否则一保存就被静默丢掉。
+  const unlisted = selected.filter((name) => !models.some((model) => model.name === name));
+
+  const toggle = (name: string, checked: boolean) => {
+    onChange(checked ? [...selected, name] : selected.filter((item) => item !== name));
+  };
+
+  const row = (name: string, hint: string) => (
+    <label
+      key={name}
+      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+    >
+      <Checkbox checked onChange={() => toggle(name, !selected.includes(name))} />
+      <span className="truncate">{name}</span>
+      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{hint}</span>
+    </label>
+  );
+
+  if (models.length === 0 && unlisted.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-border/60 px-3 py-2.5 text-xs text-muted-foreground">
+        还没有已配置的模型——先到「模型」页添加；此处不选表示不限制。
+      </p>
+    );
+  }
+
+  return (
+    <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1.5">
+      {models.map((model) => row(model.name, `${model.multiplier}×`))}
+      {unlisted.map((name) => row(name, '未配置倍率'))}
+    </div>
+  );
 }
 
 export default function AccessKeysPage() {
@@ -68,7 +107,7 @@ export default function AccessKeysPage() {
   const [newName, setNewName] = useState('');
   const [newCredits, setNewCredits] = useState('');
   const [newUnlimited, setNewUnlimited] = useState(false);
-  const [newModels, setNewModels] = useState('');
+  const [newModels, setNewModels] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
 
@@ -76,12 +115,16 @@ export default function AccessKeysPage() {
   const [editKey, setEditKey] = useState<IAccessKey | null>(null);
   const [editName, setEditName] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
-  const [editModels, setEditModels] = useState('');
+  const [editModels, setEditModels] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [creditKey, setCreditKey] = useState<IAccessKey | null>(null);
   const [creditValue, setCreditValue] = useState('');
   const [creditUnlimited, setCreditUnlimited] = useState(false);
+  // 当前展开了完整密钥的那一行（同一时刻只展开一个）。
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  // 已配置的模型，供白名单多选。
+  const [models, setModels] = useState<IModel[]>([]);
 
   const [deleteKey, setDeleteKey] = useState<IAccessKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -94,8 +137,10 @@ export default function AccessKeysPage() {
 
   const load = useCallback(async () => {
     try {
-      const list = await api.listKeys();
+      // 模型列表与密钥一起取：白名单要从中多选。
+      const [list, modelList] = await Promise.all([api.listKeys(), api.listModels()]);
       setKeys(list.keys);
+      setModels(modelList);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
@@ -126,7 +171,7 @@ export default function AccessKeysPage() {
     setNewName('');
     setNewCredits('');
     setNewUnlimited(false);
-    setNewModels('');
+    setNewModels([]);
   };
 
   const onCreate = async () => {
@@ -138,7 +183,7 @@ export default function AccessKeysPage() {
       credits: credits || undefined,
       // 只在开启时提交，缺省即有限额度。
       unlimited: newUnlimited || undefined,
-      allowed_models: parseModels(newModels) ?? undefined,
+      allowed_models: newModels.length > 0 ? newModels : undefined,
     };
     try {
       const created = await api.createKey(body);
@@ -164,7 +209,7 @@ export default function AccessKeysPage() {
     const patch = {
       name: editName.trim(),
       enabled: editEnabled,
-      allowed_models: parseModels(editModels),
+      allowed_models: editModels,
     };
     try {
       const updated = await api.updateKey(editKey.id, patch);
@@ -246,7 +291,7 @@ export default function AccessKeysPage() {
             <KeyRound className="size-5 text-primary" /> 访问密钥
           </CardTitle>
           <CardDescription>
-            密钥明文（ak_ 开头）仅在创建时展示一次，列表中仅显示前缀
+            密钥明文可随时查看——列表里点击前缀即可展开，或到详情里复制
           </CardDescription>
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <div className="relative flex-1">
@@ -309,9 +354,35 @@ export default function AccessKeysPage() {
                         <span className="block max-w-[180px] truncate">{k.name || '未命名'}</span>
                       </TableCell>
                       <TableCell>
-                        <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">
-                          {k.key_prefix}…
-                        </code>
+                        {/* 默认只显示前缀，点击才展开完整密钥 */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setRevealedId((prev) => (prev === k.id ? null : k.id))}
+                            className="flex max-w-[240px] items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-xs transition-colors hover:bg-muted"
+                            title={revealedId === k.id ? '点击隐藏' : '点击显示完整密钥'}
+                          >
+                            <span className="truncate">
+                              {revealedId === k.id ? k.secret : `${k.key_prefix}…`}
+                            </span>
+                            {revealedId === k.id ? (
+                              <EyeOff className="size-3.5 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <Eye className="size-3.5 shrink-0 text-muted-foreground" />
+                            )}
+                          </button>
+                          {revealedId === k.id && k.secret && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-full"
+                              onClick={() => void copySecret(k.secret as string)}
+                              aria-label="复制密钥"
+                            >
+                              <Copy className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
                         {k.unlimited ? (
@@ -352,7 +423,7 @@ export default function AccessKeysPage() {
                                 setEditKey(k);
                                 setEditName(k.name);
                                 setEditEnabled(k.enabled);
-                                setEditModels(k.allowed_models?.join(', ') ?? '');
+                                setEditModels(k.allowed_models ?? []);
                               }}
                             >
                               编辑
@@ -437,14 +508,8 @@ export default function AccessKeysPage() {
               <Switch id="key-unlimited" checked={newUnlimited} onCheckedChange={setNewUnlimited} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="key-models">允许模型（逗号分隔，留空不限制）</Label>
-              <Input
-                id="key-models"
-                value={newModels}
-                onChange={(e) => setNewModels(e.target.value)}
-                placeholder="如：gpt-4o, gpt-4o-mini"
-                className="rounded-lg"
-              />
+              <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
+              <ModelPicker models={models} selected={newModels} onChange={setNewModels} />
             </div>
           </div>
           <DialogFooter>
@@ -507,13 +572,8 @@ export default function AccessKeysPage() {
               <Switch id="edit-enabled" checked={editEnabled} onCheckedChange={setEditEnabled} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-models">允许模型（逗号分隔，留空不限制）</Label>
-              <Input
-                id="edit-models"
-                value={editModels}
-                onChange={(e) => setEditModels(e.target.value)}
-                className="rounded-lg"
-              />
+              <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
+              <ModelPicker models={models} selected={editModels} onChange={setEditModels} />
             </div>
           </div>
           <DialogFooter>
