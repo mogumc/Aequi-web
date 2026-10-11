@@ -185,7 +185,12 @@ export const api = {
     }),
 
   // ---- 设备管理 ----
-  listDevices: () => request<IDeviceInfo[]>('/api/devices'),
+  // 后端的列表接口统一把数组包在具名字段里（`{ devices: [...] }`），
+  // 这里解包成数组，调用方直接当列表用。
+  listDevices: async () => {
+    const res = await request<{ devices: IDeviceInfo[] }>('/api/devices');
+    return res.devices;
+  },
   removeDevice: (id: string) =>
     request<{ revoked?: number }>(`/api/devices/${id}`, { method: 'DELETE' }),
   removeAllDevices: () =>
@@ -233,7 +238,10 @@ export const api = {
     }),
 
   // ---- 上游块 ----
-  listBlocks: () => request<IUpstreamBlock[]>('/api/blocks'),
+  listBlocks: async () => {
+    const res = await request<{ blocks: IUpstreamBlock[] }>('/api/blocks');
+    return res.blocks;
+  },
   createBlock: (body: IBlockInput) =>
     request<IUpstreamBlock>('/api/blocks', { method: 'POST', body: JSON.stringify(body) }),
   updateBlock: (id: string, body: Partial<IBlockInput>) =>
@@ -243,7 +251,10 @@ export const api = {
     }),
   deleteBlock: (id: string) =>
     request<void>(`/api/blocks/${id}`, { method: 'DELETE' }),
-  listBlockKeys: (id: string) => request<IUpstreamKey[]>(`/api/blocks/${id}/keys`),
+  listBlockKeys: async (id: string) => {
+    const res = await request<{ keys: IUpstreamKey[] }>(`/api/blocks/${id}/keys`);
+    return res.keys;
+  },
   addBlockKeys: (id: string, secrets: string[], weight?: number) =>
     request<void>(`/api/blocks/${id}/keys`, {
       method: 'POST',
@@ -268,5 +279,12 @@ export const api = {
     request<unknown>(`/api/blocks/${id}/keys/${keyId}/test`, { method: 'POST' }),
 
   // ---- 请求日志 ----
-  listLogs: (limit = 500) => request<IRequestLog[]>(`/api/logs?limit=${limit}`),
+  /**
+   * 请求日志。后端把数组包在 `logs` 字段里（响应体是个对象），
+   * 这里解包成数组，调用方直接当列表用。
+   */
+  listLogs: async (limit = 500) => {
+    const res = await request<{ logs: IRequestLog[] }>(`/api/logs?limit=${limit}`);
+    return res.logs;
+  },
 };
