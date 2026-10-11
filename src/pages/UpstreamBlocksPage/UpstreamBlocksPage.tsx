@@ -628,6 +628,10 @@ export default function UpstreamBlocksPage() {
                   placeholder="如 openai-main"
                   className="rounded-lg"
                 />
+                <p className="text-xs text-muted-foreground">
+                  小写字母、数字、点、下划线、连字符；它会作为「块ID/模型名」的前缀，
+                  用来在请求里指定走这个块
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="block-name">名称</Label>
