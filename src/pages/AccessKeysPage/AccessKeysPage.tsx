@@ -54,10 +54,12 @@ import { formatCredits, formatDateTime } from '@/lib/format';
 /**
  * 密钥白名单的选择器——**双层筛选**。
  *
- * 第一层是「总表」：所有块配置的可用模型（去重后的全集）；
+ * 第一层是「总表」：所有块配置的可用模型（每个块每个模型一条，形如 `block-a/gpt-4o`）；
  * 第二层是在这份总表上勾选。
- * 列表只呈现两处都在的模型：白名单里若残留着已经从块里删掉的名字，
- * 那个模型本来就调不到，留着只会让人以为它还能用。
+ *
+ * 条目带块前缀是必须的：同一个模型名出现在两个块里时，那是两条彼此独立的授权——
+ * 只勾了 a 的 gpt-4o，就不该被轮询到 b 去。列表只呈现两处都在的条目：白名单里若
+ * 残留着已经从块里删掉的名字，那个模型本来就调不到，留着只会让人以为它还能用。
  */
 function ModelPicker({
   names,
@@ -146,9 +148,11 @@ export default function AccessKeysPage() {
       const [list, blocks] = await Promise.all([api.listKeys(), api.listBlocks()]);
       setKeys(list.keys);
 
+      // 白名单的候选是「块 + 模型」的全名：同一个模型名在不同块是两条独立授权，
+      // 出口与价格都可能不同，所以必须能分别勾选。
       const names = new Set<string>();
       for (const block of blocks) {
-        for (const model of block.models) names.add(model.name);
+        for (const model of block.models) names.add(`${block.id}/${model.name}`);
       }
       setModelNames([...names].sort());
     } catch (e) {
@@ -531,7 +535,7 @@ export default function AccessKeysPage() {
               <Switch id="key-unlimited" checked={newUnlimited} onCheckedChange={setNewUnlimited} />
             </div>
             <div className="space-y-2">
-              <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
+              <Label>允许模型（勾选「块/模型」，不选表示不限制）</Label>
               <ModelPicker names={modelNames} selected={newModels} onChange={setNewModels} />
             </div>
           </div>
@@ -595,7 +599,7 @@ export default function AccessKeysPage() {
               <Switch id="edit-enabled" checked={editEnabled} onCheckedChange={setEditEnabled} />
             </div>
             <div className="space-y-2">
-              <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
+              <Label>允许模型（勾选「块/模型」，不选表示不限制）</Label>
               <ModelPicker names={modelNames} selected={editModels} onChange={setEditModels} />
             </div>
           </div>
