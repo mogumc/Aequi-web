@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Filter, ReceiptText, RotateCcw, Search } from 'lucide-react';
+import { Filter, Loader2, ReceiptText, RefreshCw, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,7 +111,19 @@ export default function RequestLogsPage() {
       .sort((a, b) => b.created_at - a.created_at);
   }, [logs, statusFilter, range, keyQuery, nowSec]);
 
-  const onReset = () => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  /** 真正的刷新：重新从后端拉取日志流水。 */
+  const onRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  /** 筛选条件是否偏离默认值。 */
+  const hasFilter = statusFilter !== 'all' || range !== 'all' || keyQuery.trim() !== '';
+  const onClearFilter = () => {
     setStatusFilter('all');
     setRange('all');
     setKeyQuery('');
@@ -171,8 +183,19 @@ export default function RequestLogsPage() {
                 className="rounded-full bg-background pl-9"
               />
             </div>
-            <Button variant="secondary" className="rounded-full" onClick={onReset}>
-              <RotateCcw className="size-4" /> 重置
+            {hasFilter && (
+              <Button variant="ghost" className="rounded-full" onClick={onClearFilter}>
+                清除筛选
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              className="rounded-full"
+              onClick={() => void onRefresh()}
+              disabled={refreshing}
+            >
+              {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              刷新
             </Button>
           </div>
         </CardHeader>
