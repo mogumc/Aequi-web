@@ -176,7 +176,7 @@ export default function RequestLogsPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="space-y-4">
           <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>

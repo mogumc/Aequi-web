@@ -205,7 +205,7 @@ function BlockKeysDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          <div className="w-full overflow-x-auto rounded-xl border border-border/40">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -506,7 +506,7 @@ export default function UpstreamBlocksPage() {
             <Plus className="size-4" /> 新建上游
           </Button>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="space-y-4">
           <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>

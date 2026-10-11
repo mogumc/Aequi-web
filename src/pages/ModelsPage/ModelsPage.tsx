@@ -124,6 +124,7 @@ export default function ModelsPage() {
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               模型在各上游块里配置；同一个模型可以出现在多个块里，各自带不同的转发名与倍率。
+              请求时用「块/模型」这种写法可以锁定某个块，只写模型名则在提供它的块之间轮询。
             </p>
           </div>
           <Button
@@ -159,11 +160,12 @@ export default function ModelsPage() {
             />
           </div>
 
-          <div className="w-full overflow-x-auto rounded-xl border border-border/40">
+          <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="whitespace-nowrap">模型</TableHead>
+                  <TableHead className="whitespace-nowrap">调用写法</TableHead>
                   <TableHead className="whitespace-nowrap">所属块</TableHead>
                   <TableHead className="whitespace-nowrap">格式</TableHead>
                   <TableHead className="whitespace-nowrap">转发为</TableHead>
@@ -174,14 +176,14 @@ export default function ModelsPage() {
                 {blocks === null ? (
                   [0, 1, 2].map((row) => (
                     <TableRow key={row}>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={6}>
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                       {rows.length === 0
                         ? '还没有任何模型——到「上游配置」里给块添加模型'
                         : '没有匹配的模型'}
@@ -201,6 +203,14 @@ export default function ModelsPage() {
                               </Badge>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <code
+                            className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
+                            title="请求里用这个写法可以锁定该块"
+                          >
+                            {row.blockId}/{row.model.name}
+                          </code>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           <span className="flex items-center gap-1.5">

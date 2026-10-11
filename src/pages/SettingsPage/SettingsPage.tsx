@@ -670,7 +670,7 @@ export default function SettingsPage() {
                 移出其它全部设备
               </Button>
             </div>
-            <div className="w-full overflow-x-auto rounded-xl border border-border/40">
+            <div className="w-full overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

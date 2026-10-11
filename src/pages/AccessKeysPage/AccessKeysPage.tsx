@@ -97,7 +97,7 @@ function ModelPicker({
   }
 
   return (
-    <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1.5">
+    <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1.5 pr-2">
       {names.map((name) => row(name))}
     </div>
   );
@@ -334,7 +334,7 @@ export default function AccessKeysPage() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="space-y-4">
           <div className="w-full overflow-x-auto">
             <Table>
               <TableHeader>
@@ -497,7 +497,7 @@ export default function AccessKeysPage() {
 
       {/* 新建密钥 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>新建访问密钥</DialogTitle>
             <DialogDescription>创建后仅本次展示完整密钥明文，请立即保存</DialogDescription>
@@ -579,7 +579,7 @@ export default function AccessKeysPage() {
 
       {/* 编辑密钥 */}
       <Dialog open={editKey !== null} onOpenChange={(v) => !v && setEditKey(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>编辑密钥</DialogTitle>
             <DialogDescription>{editKey?.key_prefix}…</DialogDescription>
