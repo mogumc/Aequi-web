@@ -54,10 +54,8 @@ import {
 import { ApiError, api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { ModelEditor } from '@/components/model-editor';
-import { formatMultiplier } from '@/lib/multiplier';
 
 const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
-
 
 /** 块内密钥管理对话框 */
 function BlockKeysDialog({
@@ -518,7 +516,7 @@ export default function UpstreamBlocksPage() {
                   <TableHead className="whitespace-nowrap">Base URL</TableHead>
                   <TableHead className="whitespace-nowrap">权重</TableHead>
                   <TableHead className="whitespace-nowrap">可用密钥</TableHead>
-                  <TableHead className="whitespace-nowrap">模型转发</TableHead>
+                  <TableHead className="whitespace-nowrap">模型</TableHead>
                   <TableHead className="whitespace-nowrap text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -564,11 +562,20 @@ export default function UpstreamBlocksPage() {
                         {b.available_keys ?? '-'} / {b.key_count ?? '-'}
                       </TableCell>
                       <TableCell>
-                        <span className="block max-w-[240px] truncate text-muted-foreground">
-                          {b.models
-                            .map((m) => `${m.name} ${formatMultiplier(m.multiplier_bp)}×`)
-                            .join('、') || '无'}
-                        </span>
+                        {b.models.length === 0 ? (
+                          <span className="text-muted-foreground">无</span>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <span className="text-sm">{b.models.length} 个模型</span>
+                            <p className="max-w-[200px] truncate text-xs text-muted-foreground">
+                              {b.models
+                                .slice(0, 3)
+                                .map((m) => m.name)
+                                .join('、')}
+                              {b.models.length > 3 && ' 等'}
+                            </p>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>

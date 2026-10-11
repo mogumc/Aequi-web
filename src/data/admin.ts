@@ -167,8 +167,12 @@ export interface IUpstreamBlock {
   base_url: string;
   proxy: string | null;
   models: IBlockModel[];
+  /** 停用的块不参与调度。 */
+  enabled: boolean;
   key_count?: number;
   available_keys?: number;
+  created_at?: number;
+  updated_at?: number;
 }
 
 export interface IUpstreamKey {
@@ -204,5 +208,7 @@ export interface IRequestLog {
   completion_tokens: number;
   cache_tokens: number;
   estimated: boolean;
+  /** 是否流式请求。 */
+  stream: boolean;
   credits: string;
 }
