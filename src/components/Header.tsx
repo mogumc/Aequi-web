@@ -51,13 +51,13 @@ export default function Header() {
           </Badge>
         )}
         {health.phase === 'ok' && (
-          <Badge className="rounded-full bg-success/15 text-success" variant="outline">
+          <Badge className="gap-1.5 rounded-full bg-success/15 text-success" variant="outline">
             <span className="size-1.5 rounded-full bg-success" />
             服务正常{health.info.version ? ` · v${health.info.version}` : ''}
           </Badge>
         )}
         {health.phase === 'down' && (
-          <Badge variant="destructive" className="rounded-full">
+          <Badge variant="destructive" className="gap-1.5 rounded-full">
             <span className="size-1.5 rounded-full bg-current" />
             服务异常
           </Badge>

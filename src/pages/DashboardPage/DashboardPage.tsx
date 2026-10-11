@@ -135,7 +135,8 @@ export default function DashboardPage() {
         to: '/logs',
       });
     }
-    for (const key of keys.filter((k) => k.enabled && Number(k.credits) < 5)) {
+    // 无限额度的密钥不参与余额判定，也就不该出现在额度预警里。
+    for (const key of keys.filter((k) => k.enabled && !k.unlimited && Number(k.credits) < 5)) {
       items.push({
         id: `c${key.id}`,
         kind: 'credit',
@@ -159,13 +160,7 @@ export default function DashboardPage() {
         health && (
           <Card className="rounded-2xl border-none shadow-xs">
             <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-4">
-              <Badge className="rounded-full bg-success/15 text-success" variant="outline">
-                <span className="size-1.5 rounded-full bg-success" />
-                {health.status || 'ok'}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                版本 {health.version ? `v${health.version}` : '未知'}
-              </span>
+              {/* 服务状态与版本在顶栏已有，这里只放仪表盘特有的运行信息 */}
               <span className="text-sm text-muted-foreground">
                 运行时长 {formatUptime(health.uptime_seconds)}
               </span>
