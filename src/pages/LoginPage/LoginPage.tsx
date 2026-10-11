@@ -208,7 +208,7 @@ export default function LoginPage() {
                       autoFocus
                       value={otp}
                       onChange={(e) => setOtp(e.target.value)}
-                      className={`h-12 rounded-lg font-mono tracking-[0.3em] ${
+                      className={`h-12 rounded-lg tracking-[0.3em] ${
                         otpInvalid ? 'ring-2 ring-destructive' : ''
                       }`}
                       placeholder="6 位验证码"
