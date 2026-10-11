@@ -96,7 +96,7 @@ export default function AccessKeysPage() {
   const load = useCallback(async () => {
     try {
       const list = await api.listKeys();
-      setKeys(list);
+      setKeys(list.keys);
       setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {

@@ -1,4 +1,4 @@
-// EXPORTS: IHealth, ILoginResponse, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IRequestLog, MOCK_KEYS, MOCK_BLOCKS, MOCK_BLOCK_KEYS, MOCK_LOGS
+// EXPORTS: IHealth, ILoginResponse, IProvider, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IKeyListResponse, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IKeySelf, IUsageSummary, IUsageRecord, IKeyUsage, IRequestLog
 
 // ---- 公开接口 ----
 
@@ -7,7 +7,13 @@ export interface IHealth {
   version?: string;
   uptime_seconds?: number;
   account_configured?: boolean;
-  providers?: unknown[];
+  providers?: IProvider[];
+}
+
+/** 第三方登录方式（后端尚未提供时列表为空）。 */
+export interface IProvider {
+  id: string;
+  label: string;
 }
 
 export interface ILoginResponse {
@@ -73,6 +79,59 @@ export interface IAccessKey {
   created_at: number;
   updated_at: number;
   last_used_at: number | null;
+}
+
+/** 密钥列表：`keys` 是当前页，`total` 用于分页器。 */
+export interface IKeyListResponse {
+  keys: IAccessKey[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// ---- 访问密钥自助（用访问密钥登录后可见）----
+
+/** 密钥持有者能看到自己的信息，但拿不到明文（自己手里就有）。 */
+export interface IKeySelf {
+  name: string;
+  key_prefix: string;
+  credits: string;
+  credits_scaled: number;
+  enabled: boolean;
+  allowed_models: string[] | null;
+  created_at: number;
+  last_used_at: number | null;
+}
+
+export interface IUsageSummary {
+  requests: number;
+  failed: number;
+  raw_tokens: number;
+  final_tokens: number;
+  credits: string;
+  credits_scaled: number;
+}
+
+export interface IUsageRecord {
+  id: number;
+  model: string;
+  status: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cache_tokens: number;
+  estimated: boolean;
+  stream: boolean;
+  raw_tokens: number;
+  multiplier: string;
+  final_tokens: number;
+  credits: string;
+  error: string | null;
+  created_at: number;
+}
+
+export interface IKeyUsage {
+  summary: IUsageSummary;
+  records: IUsageRecord[];
 }
 
 // ---- 上游块 ----

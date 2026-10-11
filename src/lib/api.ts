@@ -6,8 +6,12 @@ import type {
   IBlockInput,
   IDeviceInfo,
   IHealth,
+  IKeyListResponse,
+  IKeySelf,
+  IKeyUsage,
   ILoginResponse,
   IOtpStatus,
+  IProvider,
   IRequestLog,
   ISystemSettings,
   IUpstreamBlock,
@@ -21,6 +25,7 @@ export const API_BASE: string =
 
 const TOKEN_KEY = 'aequi_admin_token';
 const PROFILE_KEY = 'aequi_admin_profile';
+const ACCESS_KEY_KEY = 'aequi_access_key';
 
 /**
  * 凭证的本地存放。
@@ -79,6 +84,24 @@ export function setProfile(account: IAdminAccount): void {
   writeItem(PROFILE_KEY, JSON.stringify(account));
 }
 
+/**
+ * 访问密钥登录（密钥自助视图）。
+ *
+ * 与管理员的登录令牌**互斥**：同一个浏览器同时只保留一种身份，
+ * 登录任一侧时清掉另一侧，避免请求带着身份不明两把凭证。
+ */
+export function getAccessKey(): string | null {
+  return readItem(ACCESS_KEY_KEY);
+}
+
+export function setAccessKey(secret: string): void {
+  writeItem(ACCESS_KEY_KEY, secret);
+}
+
+export function clearAccessKey(): void {
+  removeItem(ACCESS_KEY_KEY);
+}
+
 /** 归一化后的 API 错误：message 来自后端 error.message，type 来自 error.type */
 export class ApiError extends Error {
   status: number;
@@ -94,8 +117,9 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  const token = getToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  // 管理员令牌与访问密钥同时只会存在一个（见 setAccessKey 的说明）。
+  const credential = getToken() ?? getAccessKey();
+  if (credential) headers.set('Authorization', `Bearer ${credential}`);
   if (init?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -104,7 +128,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError('无法连接服务器，请检查网络或 VITE_API_BASE_URL 配置', 0, 'network_error');
+    throw new ApiError('无法连接服务器，请稍后重试', 0, 'network_error');
   }
 
   if (!res.ok) {
@@ -133,6 +157,12 @@ export function isUnauthorized(e: unknown): boolean {
 export const api = {
   // ---- 公开接口 ----
   health: () => request<IHealth>('/health'),
+  /** 可用的第三方登录方式；后端没提供时返回空数组。 */
+  providers: () => request<IProvider[]>('/api/auth/providers'),
+
+  // ---- 访问密钥自助（用访问密钥认证，只能看到自己）----
+  keyMe: () => request<IKeySelf>('/api/key/me'),
+  keyUsage: (limit = 50) => request<IKeyUsage>(`/api/key/usage?limit=${limit}`),
 
   // ---- 认证与会话 ----
   login: (body: { username: string; password: string; otp?: string }) =>
@@ -182,7 +212,15 @@ export const api = {
     }),
 
   // ---- 访问密钥 ----
-  listKeys: () => request<IAccessKey[]>('/api/keys'),
+  listKeys: (params?: { page?: number; page_size?: number; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page != null) query.set('page', String(params.page));
+    if (params?.page_size != null) query.set('page_size', String(params.page_size));
+    if (params?.search) query.set('search', params.search);
+    const suffix = query.toString();
+
+    return request<IKeyListResponse>(`/api/keys${suffix ? `?${suffix}` : ''}`);
+  },
   createKey: (body: { name?: string; credits?: string; allowed_models?: string[] }) =>
     request<IAccessKey>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
   updateKey: (id: number, patch: { name?: string; enabled?: boolean; allowed_models?: string[] | null }) =>

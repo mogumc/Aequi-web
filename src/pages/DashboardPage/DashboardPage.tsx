@@ -67,7 +67,7 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       const [k, l] = await Promise.all([api.listKeys(), api.listLogs(500)]);
-      setKeys(k);
+      setKeys(k.keys);
       setLogs(l);
       setIsMock(false);
     } catch (e) {
