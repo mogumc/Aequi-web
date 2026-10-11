@@ -53,47 +53,11 @@ import {
 } from '@/data/admin';
 import { ApiError, api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { ModelEditor } from '@/components/model-editor';
+import { formatMultiplier } from '@/lib/multiplier';
 
 const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
 
-/** 倍率的刻度：10000 = 1.0 倍。 */
-const MULTIPLIER_SCALE = 10_000;
-
-/** 把万分比格式化成四位小数字符串。 */
-function formatMultiplier(bp: number | undefined): string {
-  const value = bp ?? MULTIPLIER_SCALE;
-  const whole = Math.trunc(value / MULTIPLIER_SCALE);
-  const fraction = Math.abs(value % MULTIPLIER_SCALE);
-  return `${whole}.${String(fraction).padStart(4, '0')}`;
-}
-
-/**
- * 每行一条：`模型名[, 转发名][, 倍率]`。
- *
- * 倍率跟着模型走（模型是块内配置的），同一模型在不同块可以有不同的价；
- * 不写即 1.0 倍。
- */
-function parseModels(text: string): IBlockModel[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name, forward, multiplier] = line.split(/[,，]/).map((s) => s.trim());
-      const entry: IBlockModel = { name };
-      if (forward) entry.forward = forward;
-      if (multiplier) {
-        entry.multiplier_bp = Math.round(Number(multiplier) * MULTIPLIER_SCALE);
-      }
-      return entry;
-    });
-}
-
-function modelsToText(models: IBlockModel[]): string {
-  return models
-    .map((m) => `${m.name}, ${m.forward ?? ''}, ${formatMultiplier(m.multiplier_bp)}`)
-    .join('\n');
-}
 
 /** 块内密钥管理对话框 */
 function BlockKeysDialog({
@@ -382,7 +346,11 @@ export default function UpstreamBlocksPage() {
   const [formWeight, setFormWeight] = useState('1');
   const [formBaseUrl, setFormBaseUrl] = useState('');
   const [formProxy, setFormProxy] = useState('');
-  const [formModels, setFormModels] = useState('');
+  const [formModelList, setFormModelList] = useState<IBlockModel[]>([]);
+  // 从上游拉回来的可用模型（拉取结果与错误分开存，便于分别展示）。
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [keysBlock, setKeysBlock] = useState<IUpstreamBlock | null>(null);
@@ -419,7 +387,9 @@ export default function UpstreamBlocksPage() {
     setFormWeight('1');
     setFormBaseUrl('');
     setFormProxy('');
-    setFormModels('');
+    setFormModelList([]);
+    setFetchedModels([]);
+    setFetchError(null);
     setDialogOpen(true);
   };
 
@@ -431,8 +401,34 @@ export default function UpstreamBlocksPage() {
     setFormWeight(String(b.weight));
     setFormBaseUrl(b.base_url);
     setFormProxy(b.proxy ?? '');
-    setFormModels(modelsToText(b.models));
+    setFormModelList(b.models);
+    setFetchedModels([]);
+    setFetchError(null);
     setDialogOpen(true);
+  };
+
+  /**
+   * 拉取上游模型列表。
+   *
+   * 用的是块已保存的出口与密钥，所以只在编辑已存在的块时可用——
+   * 新建时先把块存下来，再回来拉。
+   */
+  const onFetchModels = async () => {
+    if (!editing || fetchingModels) return;
+    setFetchingModels(true);
+    setFetchError(null);
+    try {
+      const models = await api.fetchBlockModels(editing.id);
+      setFetchedModels(models);
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        handleAuthFail();
+        return;
+      }
+      setFetchError(e instanceof Error ? e.message : '拉取失败，请稍后重试');
+    } finally {
+      setFetchingModels(false);
+    }
   };
 
   const onSave = async () => {
@@ -452,7 +448,7 @@ export default function UpstreamBlocksPage() {
       weight,
       base_url: formBaseUrl.trim(),
       proxy: formProxy.trim() || null,
-      models: parseModels(formModels),
+      models: formModelList,
     };
     setSaving(true);
     try {
@@ -685,17 +681,15 @@ export default function UpstreamBlocksPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="block-models">模型（每行一条：模型名[, 转发名][, 倍率]）</Label>
-              <Textarea
-                id="block-models"
-                value={formModels}
-                onChange={(e) => setFormModels(e.target.value)}
-                className="min-h-20 rounded-lg font-mono text-xs"
-                placeholder={'gpt-4o, gpt-4o-2024-11-20, 1.5\ngpt-4o-mini'}
+              <Label>模型</Label>
+              <ModelEditor
+                models={formModelList}
+                onChange={setFormModelList}
+                onFetch={() => void onFetchModels()}
+                fetched={fetchedModels}
+                fetching={fetchingModels}
+                fetchError={fetchError}
               />
-              <p className="text-xs text-muted-foreground">
-                倍率决定计费，不写即 1.0；转发名留空表示同名转发。
-              </p>
             </div>
           </div>
           <DialogFooter>

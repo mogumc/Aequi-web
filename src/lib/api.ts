@@ -280,6 +280,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
+  /** 拉取上游模型列表。只有已保存的块才有出口与密钥可用来发这次请求。 */
+  fetchBlockModels: async (id: string) => {
+    const res = await request<{ models: string[] }>(`/api/blocks/${encodeURIComponent(id)}/models/fetch`, {
+      method: 'POST',
+    });
+    return res.models;
+  },
   testBlockKey: (id: string, keyId: string) =>
     request<unknown>(`/api/blocks/${id}/keys/${keyId}/test`, { method: 'POST' }),
 
