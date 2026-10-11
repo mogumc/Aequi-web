@@ -186,7 +186,7 @@ export const api = {
 
   // ---- 设备管理 ----
   listDevices: () => request<IDeviceInfo[]>('/api/devices'),
-  removeDevice: (id: number) =>
+  removeDevice: (id: string) =>
     request<{ revoked?: number }>(`/api/devices/${id}`, { method: 'DELETE' }),
   removeAllDevices: () =>
     request<{ revoked?: number }>('/api/devices', { method: 'DELETE' }),
@@ -223,10 +223,10 @@ export const api = {
   },
   createKey: (body: { name?: string; credits?: string; allowed_models?: string[] }) =>
     request<IAccessKey>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
-  updateKey: (id: number, patch: { name?: string; enabled?: boolean; allowed_models?: string[] | null }) =>
+  updateKey: (id: string, patch: { name?: string; enabled?: boolean; allowed_models?: string[] | null }) =>
     request<IAccessKey>(`/api/keys/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-  deleteKey: (id: number) => request<void>(`/api/keys/${id}`, { method: 'DELETE' }),
-  resetKeyCredits: (id: number, credits: string) =>
+  deleteKey: (id: string) => request<void>(`/api/keys/${id}`, { method: 'DELETE' }),
+  resetKeyCredits: (id: string, credits: string) =>
     request<IAccessKey>(`/api/keys/${id}/credits`, {
       method: 'POST',
       body: JSON.stringify({ credits }),
@@ -249,22 +249,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(weight != null ? { secrets, weight } : { secrets }),
     }),
-  removeBlockKeys: (id: string, ids: number[]) =>
+  removeBlockKeys: (id: string, ids: string[]) =>
     request<void>(`/api/blocks/${id}/keys/remove`, {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-  pauseBlockKeys: (id: string, ids: number[]) =>
+  pauseBlockKeys: (id: string, ids: string[]) =>
     request<void>(`/api/blocks/${id}/keys/pause`, {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-  resumeBlockKeys: (id: string, ids: number[]) =>
+  resumeBlockKeys: (id: string, ids: string[]) =>
     request<void>(`/api/blocks/${id}/keys/resume`, {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
-  testBlockKey: (id: string, keyId: number) =>
+  testBlockKey: (id: string, keyId: string) =>
     request<unknown>(`/api/blocks/${id}/keys/${keyId}/test`, { method: 'POST' }),
 
   // ---- 请求日志 ----

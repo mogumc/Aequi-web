@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Copy, KeyRound, Plus, Search } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,10 +46,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MOCK_KEYS, type IAccessKey } from '@/data/admin';
-import { ApiError, api, clearToken, isUnauthorized } from '@/lib/api';
+import type { IAccessKey } from '@/data/admin';
+import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits, formatDateTime } from '@/lib/format';
-
 function parseModels(text: string): string[] | null {
   const list = text
     .split(/[,，\n]/)
@@ -62,7 +60,6 @@ function parseModels(text: string): string[] | null {
 export default function AccessKeysPage() {
   const navigate = useNavigate();
   const [keys, setKeys] = useState<IAccessKey[] | null>(null);
-  const [isMock, setIsMock] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -97,14 +94,12 @@ export default function AccessKeysPage() {
     try {
       const list = await api.listKeys();
       setKeys(list.keys);
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      setKeys(MOCK_KEYS);
-      setIsMock(true);
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
     }
   }, [handleAuthFail]);
 
@@ -143,7 +138,6 @@ export default function AccessKeysPage() {
     try {
       const created = await api.createKey(body);
       setKeys((prev) => [created, ...(prev ?? [])]);
-      setIsMock(false);
       setCreatedSecret(created.secret ?? '');
       toast.success('密钥创建成功');
     } catch (e) {
@@ -151,26 +145,7 @@ export default function AccessKeysPage() {
         handleAuthFail();
         return;
       }
-      const secret = `ak_demo_${Math.random().toString(16).slice(2, 10)}`;
-      const creditsNum = Number(credits || '10');
-      const nowSec = Math.floor(Date.now() / 1000);
-      const local: IAccessKey = {
-        id: nowSec,
-        name: body.name ?? '未命名密钥',
-        key_prefix: secret.slice(0, 7),
-        credits: (creditsNum || 0).toFixed(4),
-        credits_scaled: Math.round(creditsNum * 10000),
-        enabled: true,
-        allowed_models: body.allowed_models ?? null,
-        created_at: nowSec,
-        updated_at: nowSec,
-        last_used_at: null,
-      };
-      setKeys((prev) => [local, ...(prev ?? [])]);
-      setCreatedSecret(secret);
-      toast.warning(
-        `后端未连接，已创建本地示例密钥（${e instanceof ApiError ? e.message : '未知错误'}）`,
-      );
+      toast.error(e instanceof Error ? e.message : '创建失败，请稍后重试');
     } finally {
       setCreating(false);
       setCreateOpen(false);
@@ -195,14 +170,7 @@ export default function AccessKeysPage() {
         handleAuthFail();
         return;
       }
-      setKeys((prev) =>
-        prev?.map((k) =>
-          k.id === editKey.id
-            ? { ...k, name: patch.name, enabled: patch.enabled, allowed_models: patch.allowed_models }
-            : k,
-        ) ?? prev,
-      );
-      toast.warning(`后端未连接，已更新本地示例（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '更新失败，请稍后重试');
     } finally {
       setSaving(false);
       setEditKey(null);
@@ -226,13 +194,7 @@ export default function AccessKeysPage() {
         handleAuthFail();
         return;
       }
-      const scaled = Math.round(Number(credits) * 10000);
-      setKeys((prev) =>
-        prev?.map((k) =>
-          k.id === creditKey.id ? { ...k, credits: Number(credits).toFixed(4), credits_scaled: scaled } : k,
-        ) ?? prev,
-      );
-      toast.warning(`后端未连接，已在本地调整（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '重置失败，请稍后重试');
     } finally {
       setSaving(false);
       setCreditKey(null);
@@ -244,15 +206,15 @@ export default function AccessKeysPage() {
     setSaving(true);
     try {
       await api.deleteKey(deleteKey.id);
+      setKeys((prev) => prev?.filter((k) => k.id !== deleteKey.id) ?? prev);
       toast.success('密钥已删除');
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      toast.warning(`后端未连接，已在本地删除示例（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '删除失败，请稍后重试');
     } finally {
-      setKeys((prev) => prev?.filter((k) => k.id !== deleteKey.id) ?? prev);
       setSaving(false);
       setDeleteKey(null);
       setDeleteConfirm('');
@@ -267,15 +229,6 @@ export default function AccessKeysPage() {
 
   return (
     <div className="space-y-6">
-      {isMock && (
-        <Alert className="rounded-xl border-warning/40 bg-warning/10">
-          <AlertTitle>示例数据模式</AlertTitle>
-          <AlertDescription>
-            无法连接 Aequi 后端，以下为本地示例数据；增删改仅在本页生效，接入真实后端后自动切换为 API 链路。
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Card className="rounded-2xl border-none shadow-xs">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">

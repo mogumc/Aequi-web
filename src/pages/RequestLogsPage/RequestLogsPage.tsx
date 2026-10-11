@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Filter, ReceiptText, RotateCcw, Search } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MOCK_LOGS, type IRequestLog } from '@/data/admin';
+import type { IRequestLog } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits, formatDateTime, formatDuration } from '@/lib/format';
 
@@ -63,11 +62,12 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export default function RequestLogsPage() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<IRequestLog[] | null>(null);
-  const [isMock, setIsMock] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [range, setRange] = useState('all');
   const [keyQuery, setKeyQuery] = useState('');
   const [detail, setDetail] = useState<IRequestLog | null>(null);
+  // 时间范围筛选的基准：固定于挂载时刻，免得 useMemo 里取当前时间导致结果不稳定。
+  const [nowSec] = useState(() => Math.floor(Date.now() / 1000));
 
   const handleAuthFail = useCallback(() => {
     clearToken();
@@ -79,14 +79,12 @@ export default function RequestLogsPage() {
     try {
       const list = await api.listLogs(500);
       setLogs(list);
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      setLogs(MOCK_LOGS);
-      setIsMock(true);
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
     }
   }, [handleAuthFail]);
 
@@ -96,7 +94,6 @@ export default function RequestLogsPage() {
 
   const filtered = useMemo(() => {
     if (!logs) return [];
-    const nowSec = Math.floor(Date.now() / 1000);
     const rangeStart =
       range === '1h' ? nowSec - 3600 : range === '24h' ? nowSec - 86400 : range === '7d' ? nowSec - 7 * 86400 : 0;
     const kw = keyQuery.trim().toLowerCase();
@@ -112,7 +109,7 @@ export default function RequestLogsPage() {
         );
       })
       .sort((a, b) => b.created_at - a.created_at);
-  }, [logs, statusFilter, range, keyQuery]);
+  }, [logs, statusFilter, range, keyQuery, nowSec]);
 
   const onReset = () => {
     setStatusFilter('all');
@@ -122,14 +119,6 @@ export default function RequestLogsPage() {
 
   return (
     <div className="space-y-6">
-      {isMock && (
-        <Alert className="rounded-xl border-warning/40 bg-warning/10">
-          <AlertTitle>示例数据模式</AlertTitle>
-          <AlertDescription>
-            无法连接 Aequi 后端，以下为本地示例日志；真实链路为 GET /api/logs?limit=500，筛选在本地完成。
-          </AlertDescription>
-        </Alert>
-      )}
 
       <Card className="rounded-2xl border-none shadow-xs">
         <CardHeader>

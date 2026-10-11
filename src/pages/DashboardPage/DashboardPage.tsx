@@ -25,8 +25,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  MOCK_KEYS,
-  MOCK_LOGS,
   type IAccessKey,
   type IHealth,
   type IRequestLog,
@@ -47,7 +45,8 @@ export default function DashboardPage() {
   const [healthDown, setHealthDown] = useState(false);
   const [keys, setKeys] = useState<IAccessKey[] | null>(null);
   const [logs, setLogs] = useState<IRequestLog[] | null>(null);
-  const [isMock, setIsMock] = useState(false);
+  // 趋势与筛选的时间基准：固定于挂载时刻，免得在 useMemo 里取当前时间。
+  const [nowSec] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +68,6 @@ export default function DashboardPage() {
       const [k, l] = await Promise.all([api.listKeys(), api.listLogs(500)]);
       setKeys(k.keys);
       setLogs(l);
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         clearToken();
@@ -77,9 +75,7 @@ export default function DashboardPage() {
         navigate('/login', { replace: true });
         return;
       }
-      setKeys(MOCK_KEYS);
-      setLogs(MOCK_LOGS);
-      setIsMock(true);
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
     }
   }, [navigate]);
 
@@ -105,7 +101,6 @@ export default function DashboardPage() {
 
   const trend = useMemo(() => {
     if (!logs) return [];
-    const nowSec = Math.floor(Date.now() / 1000);
     const start = nowSec - 11 * 3600;
     const buckets = Array.from({ length: 12 }, (_, i) => ({
       label: format(fromUnixTime(start + i * 3600), 'HH:00'),
@@ -120,7 +115,7 @@ export default function DashboardPage() {
       }
     }
     return buckets;
-  }, [logs]);
+  }, [logs, nowSec]);
 
   const alerts = useMemo(() => {
     if (!keys || !logs) return [];
@@ -154,16 +149,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {isMock && (
-        <Alert className="rounded-xl border-warning/40 bg-warning/10">
-          <AlertTriangle className="size-4 text-warning" />
-          <AlertTitle>示例数据模式</AlertTitle>
-          <AlertDescription>
-            无法连接 Aequi 后端（请检查 VITE_API_BASE_URL），以下为本地示例数据，所有操作仅在本页生效。
-          </AlertDescription>
-        </Alert>
-      )}
-
       {healthDown ? (
         <Alert variant="destructive" className="rounded-xl">
           <ServerCrash className="size-4" />

@@ -221,10 +221,7 @@ export default function SettingsPage() {
         listen: form.listen,
       };
       applySettings(updated, true);
-      if (restartFields.length > 0) setRestartNeeded(restartFields);
-      toast.warning(
-        `后端未连接，配置仅保存在本页（${e instanceof ApiError ? e.message : '未知错误'}）`,
-      );
+      toast.error(e instanceof Error ? e.message : '保存失败，请稍后重试');
     } finally {
       setSavingSettings(false);
     }
@@ -365,7 +362,7 @@ export default function SettingsPage() {
     }
   };
 
-  const onKick = async (id: number) => {
+  const onKick = async (id: string) => {
     if (kickBusy) return;
     setKickBusy(true);
     try {

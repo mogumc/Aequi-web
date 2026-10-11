@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FlaskConical, Network, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,8 +46,6 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  MOCK_BLOCK_KEYS,
-  MOCK_BLOCKS,
   type IBlockInput,
   type IBlockModel,
   type IUpstreamBlock,
@@ -87,9 +84,8 @@ function BlockKeysDialog({
   onAuthFail: () => void;
 }) {
   const [keys, setKeys] = useState<IUpstreamKey[] | null>(null);
-  const [isMock, setIsMock] = useState(false);
   const [secretsText, setSecretsText] = useState('');
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   const blockId = block?.id ?? '';
@@ -100,14 +96,12 @@ function BlockKeysDialog({
     try {
       const list = await api.listBlockKeys(blockId);
       setKeys(list);
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         onAuthFail();
         return;
       }
-      setKeys(MOCK_BLOCK_KEYS.filter((k) => k.block_id === blockId));
-      setIsMock(true);
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
     }
   }, [blockId, onAuthFail]);
 
@@ -117,7 +111,7 @@ function BlockKeysDialog({
 
   const batchAction = async (
     action: 'pause' | 'resume' | 'remove',
-    keyId: number,
+    keyId: string,
     label: string,
   ) => {
     if (!blockId || busyId !== null) return;
@@ -127,27 +121,34 @@ function BlockKeysDialog({
       else if (action === 'resume') await api.resumeBlockKeys(blockId, [keyId]);
       else await api.removeBlockKeys(blockId, [keyId]);
       toast.success(label);
+
+      // 成功之后再更新本地列表，省一次往返；失败时列表保持原样。
+      if (action === 'pause') {
+        setKeys((prev) => prev?.map((k) => (k.id === keyId ? { ...k, status: 'paused' } : k)) ?? prev);
+      } else if (action === 'resume') {
+        setKeys(
+          (prev) =>
+            prev?.map((k) =>
+              k.id === keyId
+                ? { ...k, status: 'active', failure_count: 0, cooldown_until: null }
+                : k,
+            ) ?? prev,
+        );
+      } else {
+        setKeys((prev) => prev?.filter((k) => k.id !== keyId) ?? prev);
+      }
     } catch (e) {
       if (isUnauthorized(e)) {
         onAuthFail();
         return;
       }
-      toast.warning(`后端未连接，已更新本地示例（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '操作失败，请稍后重试');
     } finally {
       setBusyId(null);
-      if (action === 'pause') {
-        setKeys((prev) => prev?.map((k) => (k.id === keyId ? { ...k, status: 'paused' } : k)) ?? prev);
-      } else if (action === 'resume') {
-        setKeys((prev) =>
-          prev?.map((k) => (k.id === keyId ? { ...k, status: 'active', failure_count: 0, cooldown_until: null } : k)) ?? prev,
-        );
-      } else {
-        setKeys((prev) => prev?.filter((k) => k.id !== keyId) ?? prev);
-      }
     }
   };
 
-  const onTest = async (keyId: number) => {
+  const onTest = async (keyId: string) => {
     if (!blockId || busyId !== null) return;
     setBusyId(keyId);
     toast.info('正在测试密钥（走列表模型接口，不消耗 token）…');
@@ -218,11 +219,6 @@ function BlockKeysDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          {isMock && (
-            <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
-              后端未连接，展示本地示例密钥
-            </p>
-          )}
           <div className="w-full overflow-x-auto rounded-xl border border-border/40">
             <Table>
               <TableHeader>
@@ -352,7 +348,6 @@ function BlockKeysDialog({
 export default function UpstreamBlocksPage() {
   const navigate = useNavigate();
   const [blocks, setBlocks] = useState<IUpstreamBlock[] | null>(null);
-  const [isMock, setIsMock] = useState(false);
 
   // 新建 / 编辑
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -379,14 +374,12 @@ export default function UpstreamBlocksPage() {
     try {
       const list = await api.listBlocks();
       setBlocks(list);
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      setBlocks(MOCK_BLOCKS);
-      setIsMock(true);
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
     }
   }, [handleAuthFail]);
 
@@ -448,26 +441,12 @@ export default function UpstreamBlocksPage() {
         setBlocks((prev) => [...(prev ?? []), created]);
         toast.success('上游块已创建');
       }
-      setIsMock(false);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      if (editing) {
-        const updated: IUpstreamBlock = {
-          ...editing,
-          ...body,
-        };
-        setBlocks((prev) => prev?.map((b) => (b.id === editing.id ? updated : b)) ?? prev);
-      } else {
-        const created: IUpstreamBlock = {
-          id: formId.trim(),
-          ...body,
-        };
-        setBlocks((prev) => [...(prev ?? []), created]);
-      }
-      toast.warning(`后端未连接，已更新本地示例（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '保存失败，请稍后重试');
     } finally {
       setSaving(false);
       setDialogOpen(false);
@@ -479,15 +458,15 @@ export default function UpstreamBlocksPage() {
     setSaving(true);
     try {
       await api.deleteBlock(deleteBlock.id);
+      setBlocks((prev) => prev?.filter((b) => b.id !== deleteBlock.id) ?? prev);
       toast.success('上游块已删除');
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
         return;
       }
-      toast.warning(`后端未连接，已删除本地示例（${e instanceof ApiError ? e.message : '未知错误'}）`);
+      toast.error(e instanceof Error ? e.message : '删除失败，请稍后重试');
     } finally {
-      setBlocks((prev) => prev?.filter((b) => b.id !== deleteBlock.id) ?? prev);
       setSaving(false);
       setDeleteBlock(null);
     }
@@ -495,15 +474,6 @@ export default function UpstreamBlocksPage() {
 
   return (
     <div className="space-y-6">
-      {isMock && (
-        <Alert className="rounded-xl border-warning/40 bg-warning/10">
-          <AlertTitle>示例数据模式</AlertTitle>
-          <AlertDescription>
-            无法连接 Aequi 后端，以下为本地示例数据；操作仅在本页生效。
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Card className="rounded-2xl border-none shadow-xs">
         <CardHeader className="flex-row items-start justify-between space-y-0">
           <div className="space-y-1.5">
