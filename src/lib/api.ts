@@ -226,15 +226,20 @@ export const api = {
 
     return request<IKeyListResponse>(`/api/keys${suffix ? `?${suffix}` : ''}`);
   },
-  createKey: (body: { name?: string; credits?: string; allowed_models?: string[] }) =>
-    request<IAccessKey>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
+  createKey: (body: {
+    name?: string;
+    credits?: string;
+    unlimited?: boolean;
+    allowed_models?: string[];
+  }) => request<IAccessKey>('/api/keys', { method: 'POST', body: JSON.stringify(body) }),
   updateKey: (id: string, patch: { name?: string; enabled?: boolean; allowed_models?: string[] | null }) =>
     request<IAccessKey>(`/api/keys/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteKey: (id: string) => request<void>(`/api/keys/${id}`, { method: 'DELETE' }),
-  resetKeyCredits: (id: string, credits: string) =>
+  /** 调整额度：余额与无限开关，只提交要改的那部分。 */
+  resetKeyCredits: (id: string, patch: { credits?: string; unlimited?: boolean }) =>
     request<IAccessKey>(`/api/keys/${id}/credits`, {
       method: 'POST',
-      body: JSON.stringify({ credits }),
+      body: JSON.stringify(patch),
     }),
 
   // ---- 上游块 ----

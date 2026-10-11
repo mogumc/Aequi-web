@@ -76,6 +76,8 @@ export interface IAccessKey {
   key_prefix: string;
   credits: string;
   credits_scaled: number;
+  /** 无限额度：不看余额，但用量照记。 */
+  unlimited: boolean;
   enabled: boolean;
   allowed_models: string[] | null;
   created_at: number;
@@ -99,6 +101,8 @@ export interface IKeySelf {
   key_prefix: string;
   credits: string;
   credits_scaled: number;
+  /** 无限额度：余额不是限制，消耗仍然照记。 */
+  unlimited: boolean;
   enabled: boolean;
   allowed_models: string[] | null;
   created_at: number;

@@ -111,8 +111,8 @@ export default function KeyPortalPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="剩余额度"
-            value={self ? formatCredits(self.credits) : null}
-            hint="积分"
+            value={self ? (self.unlimited ? '无限' : formatCredits(self.credits)) : null}
+            hint={self?.unlimited ? '消耗仍然照记' : '积分'}
           />
           <StatCard
             title="请求次数"

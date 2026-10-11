@@ -67,6 +67,7 @@ export default function AccessKeysPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCredits, setNewCredits] = useState('');
+  const [newUnlimited, setNewUnlimited] = useState(false);
   const [newModels, setNewModels] = useState('');
   const [creating, setCreating] = useState(false);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function AccessKeysPage() {
 
   const [creditKey, setCreditKey] = useState<IAccessKey | null>(null);
   const [creditValue, setCreditValue] = useState('');
+  const [creditUnlimited, setCreditUnlimited] = useState(false);
 
   const [deleteKey, setDeleteKey] = useState<IAccessKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -123,6 +125,7 @@ export default function AccessKeysPage() {
   const resetCreateForm = () => {
     setNewName('');
     setNewCredits('');
+    setNewUnlimited(false);
     setNewModels('');
   };
 
@@ -133,6 +136,8 @@ export default function AccessKeysPage() {
     const body = {
       name: newName.trim() || undefined,
       credits: credits || undefined,
+      // 只在开启时提交，缺省即有限额度。
+      unlimited: newUnlimited || undefined,
       allowed_models: parseModels(newModels) ?? undefined,
     };
     try {
@@ -180,15 +185,21 @@ export default function AccessKeysPage() {
   const onResetCredits = async () => {
     if (!creditKey || saving) return;
     const credits = creditValue.trim();
-    if (!credits || Number.isNaN(Number(credits)) || Number(credits) < 0) {
+    // 无限额度不看余额，只有切到有限额度时才校验数值。
+    if (!creditUnlimited && (!credits || Number.isNaN(Number(credits)) || Number(credits) < 0)) {
       toast.error('请输入有效的额度数值');
       return;
     }
     setSaving(true);
     try {
-      const updated = await api.resetKeyCredits(creditKey.id, credits);
+      const updated = await api.resetKeyCredits(creditKey.id, {
+        credits: credits || undefined,
+        unlimited: creditUnlimited,
+      });
       setKeys((prev) => prev?.map((k) => (k.id === updated.id ? updated : k)) ?? prev);
-      toast.success(`额度已重置为 ${formatCredits(credits)}`);
+      toast.success(
+        creditUnlimited ? '已设为无限额度' : `额度已重置为 ${formatCredits(credits)}`,
+      );
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
@@ -303,7 +314,11 @@ export default function AccessKeysPage() {
                         </code>
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        {formatCredits(k.credits)}
+                        {k.unlimited ? (
+                          <Badge variant="secondary">无限</Badge>
+                        ) : (
+                          formatCredits(k.credits)
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className="block max-w-[200px] truncate text-muted-foreground">
@@ -346,6 +361,7 @@ export default function AccessKeysPage() {
                               onClick={() => {
                                 setCreditKey(k);
                                 setCreditValue(String(Number(k.credits)));
+                                setCreditUnlimited(k.unlimited);
                               }}
                             >
                               调整额度
@@ -406,9 +422,19 @@ export default function AccessKeysPage() {
                 inputMode="decimal"
                 value={newCredits}
                 onChange={(e) => setNewCredits(e.target.value)}
-                placeholder="如：100"
+                placeholder={newUnlimited ? '无限额度下只是个起点' : '如：100'}
                 className="rounded-lg"
+                disabled={newUnlimited}
               />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+              <div className="space-y-0.5">
+                <Label htmlFor="key-unlimited">无限额度</Label>
+                <p className="text-xs text-muted-foreground">
+                  不设上限，消耗与用量照常记录
+                </p>
+              </div>
+              <Switch id="key-unlimited" checked={newUnlimited} onCheckedChange={setNewUnlimited} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="key-models">允许模型（逗号分隔，留空不限制）</Label>
@@ -518,7 +544,21 @@ export default function AccessKeysPage() {
               value={creditValue}
               onChange={(e) => setCreditValue(e.target.value)}
               className="rounded-lg"
-              placeholder="如：50"
+              placeholder={creditUnlimited ? '无限额度下只是个起点' : '如：50'}
+              disabled={creditUnlimited}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+            <div className="space-y-0.5">
+              <Label htmlFor="credit-unlimited">无限额度</Label>
+              <p className="text-xs text-muted-foreground">
+                不设上限，消耗与用量照常记录
+              </p>
+            </div>
+            <Switch
+              id="credit-unlimited"
+              checked={creditUnlimited}
+              onCheckedChange={setCreditUnlimited}
             />
           </div>
           <DialogFooter>
