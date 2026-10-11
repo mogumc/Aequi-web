@@ -165,8 +165,14 @@ function BlockKeysDialog({
     }
     setAdding(true);
     try {
-      await api.addBlockKeys(blockId, secrets);
-      toast.success(`已添加 ${secrets.length} 条密钥`);
+      const { keys, skipped } = await api.addBlockKeys(blockId, secrets);
+      if (keys.length === 0) {
+        toast.warning(`没有新增密钥：${skipped} 条与已有密钥重复`);
+      } else if (skipped > 0) {
+        toast.success(`新增 ${keys.length} 条密钥，跳过 ${skipped} 条重复`);
+      } else {
+        toast.success(`已添加 ${keys.length} 条密钥`);
+      }
     } catch (e) {
       if (isUnauthorized(e)) {
         onAuthFail();

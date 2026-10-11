@@ -260,8 +260,9 @@ export const api = {
     const res = await request<{ keys: IUpstreamKey[] }>(`/api/blocks/${id}/keys`);
     return res.keys;
   },
+  /** 返回真正入库的密钥与被跳过的重复数量（重复自动跳过，不报错）。 */
   addBlockKeys: (id: string, secrets: string[], weight?: number) =>
-    request<void>(`/api/blocks/${id}/keys`, {
+    request<{ keys: IUpstreamKey[]; skipped: number }>(`/api/blocks/${id}/keys`, {
       method: 'POST',
       body: JSON.stringify(weight != null ? { secrets, weight } : { secrets }),
     }),
