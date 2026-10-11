@@ -51,7 +51,14 @@ import type { IAccessKey } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits, formatDateTime } from '@/lib/format';
 
-/** 从各块已配置的模型里多选；一个都不选表示不限制。 */
+/**
+ * 密钥白名单的选择器——**双层筛选**。
+ *
+ * 第一层是「总表」：所有块配置的可用模型（去重后的全集）；
+ * 第二层是在这份总表上勾选。
+ * 列表只呈现两处都在的模型：白名单里若残留着已经从块里删掉的名字，
+ * 那个模型本来就调不到，留着只会让人以为它还能用。
+ */
 function ModelPicker({
   names,
   selected,
@@ -61,9 +68,6 @@ function ModelPicker({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
-  // 已在白名单里、但块里已经没有的名字也要列出来，否则一保存就被静默丢掉。
-  const stale = selected.filter((name) => !names.includes(name));
-
   const toggle = (name: string, checked: boolean) => {
     onChange(checked ? [...selected, name] : selected.filter((item) => item !== name));
   };
@@ -82,7 +86,7 @@ function ModelPicker({
     </label>
   );
 
-  if (names.length === 0 && stale.length === 0) {
+  if (names.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border/60 px-3 py-2.5 text-xs text-muted-foreground">
         还没有可选的模型——先到「上游配置」里给块添加模型；此处不选表示不限制。
@@ -93,7 +97,6 @@ function ModelPicker({
   return (
     <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1.5">
       {names.map((name) => row(name))}
-      {stale.map((name) => row(name, '块里已移除'))}
     </div>
   );
 }
@@ -216,7 +219,11 @@ export default function AccessKeysPage() {
     const patch = {
       name: editName.trim(),
       enabled: editEnabled,
-      allowed_models: editModels,
+      // 保存时再取一次交集，确保白名单里不会留下总表里已经没有的名字。
+      allowed_models:
+        modelNames.length > 0
+          ? editModels.filter((name) => modelNames.includes(name))
+          : editModels,
     };
     try {
       const updated = await api.updateKey(editKey.id, patch);
@@ -430,7 +437,16 @@ export default function AccessKeysPage() {
                                 setEditKey(k);
                                 setEditName(k.name);
                                 setEditEnabled(k.enabled);
-                                setEditModels(k.allowed_models ?? []);
+                                // 只载入总表里仍存在的：已经从块里删掉的模型
+                                // 调不到，留在白名单里只会误导。（总表还没加载
+                                // 出来时不要清洗，免得把配置误清空。）
+                                setEditModels(
+                                  modelNames.length > 0
+                                    ? (k.allowed_models ?? []).filter((name) =>
+                                        modelNames.includes(name),
+                                      )
+                                    : (k.allowed_models ?? []),
+                                );
                               }}
                             >
                               编辑
