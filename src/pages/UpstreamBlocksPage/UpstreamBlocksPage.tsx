@@ -56,19 +56,43 @@ import { formatDateTime } from '@/lib/format';
 
 const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
 
+/** 倍率的刻度：10000 = 1.0 倍。 */
+const MULTIPLIER_SCALE = 10_000;
+
+/** 把万分比格式化成四位小数字符串。 */
+function formatMultiplier(bp: number | undefined): string {
+  const value = bp ?? MULTIPLIER_SCALE;
+  const whole = Math.trunc(value / MULTIPLIER_SCALE);
+  const fraction = Math.abs(value % MULTIPLIER_SCALE);
+  return `${whole}.${String(fraction).padStart(4, '0')}`;
+}
+
+/**
+ * 每行一条：`模型名[, 转发名][, 倍率]`。
+ *
+ * 倍率跟着模型走（模型是块内配置的），同一模型在不同块可以有不同的价；
+ * 不写即 1.0 倍。
+ */
 function parseModels(text: string): IBlockModel[] {
   return text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [name, forward] = line.split(/[,，]/).map((s) => s.trim());
-      return forward ? { name, forward } : { name };
+      const [name, forward, multiplier] = line.split(/[,，]/).map((s) => s.trim());
+      const entry: IBlockModel = { name };
+      if (forward) entry.forward = forward;
+      if (multiplier) {
+        entry.multiplier_bp = Math.round(Number(multiplier) * MULTIPLIER_SCALE);
+      }
+      return entry;
     });
 }
 
 function modelsToText(models: IBlockModel[]): string {
-  return models.map((m) => (m.forward ? `${m.name}, ${m.forward}` : m.name)).join('\n');
+  return models
+    .map((m) => `${m.name}, ${m.forward ?? ''}, ${formatMultiplier(m.multiplier_bp)}`)
+    .join('\n');
 }
 
 /** 块内密钥管理对话框 */
@@ -544,8 +568,10 @@ export default function UpstreamBlocksPage() {
                         {b.available_keys ?? '-'} / {b.key_count ?? '-'}
                       </TableCell>
                       <TableCell>
-                        <span className="block max-w-[200px] truncate text-muted-foreground">
-                          {b.models.map((m) => m.name).join(', ') || '无'}
+                        <span className="block max-w-[240px] truncate text-muted-foreground">
+                          {b.models
+                            .map((m) => `${m.name} ${formatMultiplier(m.multiplier_bp)}×`)
+                            .join('、') || '无'}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -659,14 +685,17 @@ export default function UpstreamBlocksPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="block-models">模型转发（每行一条：模型名[, 转发名]）</Label>
+              <Label htmlFor="block-models">模型（每行一条：模型名[, 转发名][, 倍率]）</Label>
               <Textarea
                 id="block-models"
                 value={formModels}
                 onChange={(e) => setFormModels(e.target.value)}
                 className="min-h-20 rounded-lg font-mono text-xs"
-                placeholder={'gpt-4o, gpt-4o-2024-11-20\ngpt-4o-mini'}
+                placeholder={'gpt-4o, gpt-4o-2024-11-20, 1.5\ngpt-4o-mini'}
               />
+              <p className="text-xs text-muted-foreground">
+                倍率决定计费，不写即 1.0；转发名留空表示同名转发。
+              </p>
             </div>
           </div>
           <DialogFooter>

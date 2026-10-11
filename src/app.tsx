@@ -2,7 +2,6 @@ import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import DashboardPage from "@/pages/DashboardPage/DashboardPage";
 import AccessKeysPage from "@/pages/AccessKeysPage/AccessKeysPage";
-import ModelsPage from "@/pages/ModelsPage/ModelsPage";
 import UpstreamBlocksPage from "@/pages/UpstreamBlocksPage/UpstreamBlocksPage";
 import RequestLogsPage from "@/pages/RequestLogsPage/RequestLogsPage";
 import SettingsPage from "@/pages/SettingsPage/SettingsPage";
@@ -16,7 +15,6 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
         <Route path="keys" element={<AccessKeysPage />} />
-        <Route path="models" element={<ModelsPage />} />
         <Route path="upstreams" element={<UpstreamBlocksPage />} />
         <Route path="logs" element={<RequestLogsPage />} />
         <Route path="settings" element={<SettingsPage />} />

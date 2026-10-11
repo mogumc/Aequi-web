@@ -93,25 +93,6 @@ export interface IKeyListResponse {
   page_size: number;
 }
 
-// ---- 模型计费配置 ----
-
-/** 一个模型的计费配置（只影响倍率，不影响模型是否可用）。 */
-export interface IModel {
-  name: string;
-  /** 倍率，四位小数字符串。 */
-  multiplier: string;
-  /** 同一数值的万分比整数。 */
-  multiplier_bp: number;
-  /** 配置是否生效；停用时计费回落到默认倍率。 */
-  enabled: boolean;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface IModelListResponse {
-  models: IModel[];
-}
-
 // ---- 访问密钥自助（用访问密钥登录后可见）----
 
 /** 密钥持有者能看到自己的信息，但拿不到明文（自己手里就有）。 */
@@ -164,6 +145,8 @@ export interface IKeyUsage {
 export interface IBlockModel {
   name: string;
   forward?: string;
+  /** 计费倍率，万分比整数（10000 = 1.0 倍）。倍率跟着模型走，模型属于块。 */
+  multiplier_bp?: number;
 }
 
 export interface IBlockInput {

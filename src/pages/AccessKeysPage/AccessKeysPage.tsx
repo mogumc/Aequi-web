@@ -47,51 +47,53 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { IAccessKey, IModel } from '@/data/admin';
+import type { IAccessKey } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits, formatDateTime } from '@/lib/format';
 
-/** 从已配置的模型里多选；一个都不选表示不限制。 */
+/** 从各块已配置的模型里多选；一个都不选表示不限制。 */
 function ModelPicker({
-  models,
+  names,
   selected,
   onChange,
 }: {
-  models: IModel[];
+  names: string[];
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
-  // 已在白名单里、但还没建模型配置的名字（块里配过就能用）也要列出来，
-  // 否则一保存就被静默丢掉。
-  const unlisted = selected.filter((name) => !models.some((model) => model.name === name));
+  // 已在白名单里、但块里已经没有的名字也要列出来，否则一保存就被静默丢掉。
+  const stale = selected.filter((name) => !names.includes(name));
 
   const toggle = (name: string, checked: boolean) => {
     onChange(checked ? [...selected, name] : selected.filter((item) => item !== name));
   };
 
-  const row = (name: string, hint: string) => (
+  const row = (name: string, hint?: string) => (
     <label
       key={name}
       className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
     >
-      <Checkbox checked onChange={() => toggle(name, !selected.includes(name))} />
+      <Checkbox
+        checked={selected.includes(name)}
+        onCheckedChange={(checked) => toggle(name, checked === true)}
+      />
       <span className="truncate">{name}</span>
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{hint}</span>
+      {hint && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
 
-  if (models.length === 0 && unlisted.length === 0) {
+  if (names.length === 0 && stale.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border/60 px-3 py-2.5 text-xs text-muted-foreground">
-        还没有已配置的模型——先到「模型」页添加；此处不选表示不限制。
+        还没有可选的模型——先到「上游配置」里给块添加模型；此处不选表示不限制。
       </p>
     );
   }
 
   return (
     <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border border-border/60 p-1.5">
-      {models.map((model) => row(model.name, `${model.multiplier}×`))}
-      {unlisted.map((name) => row(name, '未配置倍率'))}
+      {names.map((name) => row(name))}
+      {stale.map((name) => row(name, '块里已移除'))}
     </div>
   );
 }
@@ -123,8 +125,8 @@ export default function AccessKeysPage() {
   const [creditUnlimited, setCreditUnlimited] = useState(false);
   // 当前展开了完整密钥的那一行（同一时刻只展开一个）。
   const [revealedId, setRevealedId] = useState<string | null>(null);
-  // 已配置的模型，供白名单多选。
-  const [models, setModels] = useState<IModel[]>([]);
+  // 已配置的模型名（来自各块），供白名单多选。
+  const [modelNames, setModelNames] = useState<string[]>([]);
 
   const [deleteKey, setDeleteKey] = useState<IAccessKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -137,10 +139,15 @@ export default function AccessKeysPage() {
 
   const load = useCallback(async () => {
     try {
-      // 模型列表与密钥一起取：白名单要从中多选。
-      const [list, modelList] = await Promise.all([api.listKeys(), api.listModels()]);
+      // 白名单的候选模型来自各块的配置，和密钥一起取。
+      const [list, blocks] = await Promise.all([api.listKeys(), api.listBlocks()]);
       setKeys(list.keys);
-      setModels(modelList);
+
+      const names = new Set<string>();
+      for (const block of blocks) {
+        for (const model of block.models) names.add(model.name);
+      }
+      setModelNames([...names].sort());
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
@@ -509,7 +516,7 @@ export default function AccessKeysPage() {
             </div>
             <div className="space-y-2">
               <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
-              <ModelPicker models={models} selected={newModels} onChange={setNewModels} />
+              <ModelPicker names={modelNames} selected={newModels} onChange={setNewModels} />
             </div>
           </div>
           <DialogFooter>
@@ -573,7 +580,7 @@ export default function AccessKeysPage() {
             </div>
             <div className="space-y-2">
               <Label>允许模型（从已配置的模型里选，不选表示不限制）</Label>
-              <ModelPicker models={models} selected={editModels} onChange={setEditModels} />
+              <ModelPicker names={modelNames} selected={editModels} onChange={setEditModels} />
             </div>
           </div>
           <DialogFooter>
