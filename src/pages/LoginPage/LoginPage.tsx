@@ -12,7 +12,6 @@ import {
   ApiError,
   api,
   clearAccessKey,
-  clearToken,
   getToken,
   setAccessKey,
   setProfile,
@@ -80,7 +79,8 @@ export default function LoginPage() {
         password,
         otp: needOtp && otp ? otp : undefined,
       });
-      clearAccessKey();
+      // 两种身份独立存放：管理端登录不再清门户的访问密钥，
+      // 同一浏览器里两边可以共存（请求按作用域各带各的凭证）。
       setToken(res.token);
       setProfile({
         id: res.account.id,
@@ -121,7 +121,6 @@ export default function LoginPage() {
       // 先存再验：校验请求本身就要带上这把密钥。
       setAccessKey(secret);
       await api.keyMe();
-      clearToken();
       toast.success('已进入密钥视图');
       navigate('/portal', { replace: true });
     } catch (err) {

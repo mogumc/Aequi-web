@@ -62,6 +62,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export default function RequestLogsPage() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<IRequestLog[] | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [range, setRange] = useState('all');
   const [keyQuery, setKeyQuery] = useState('');
@@ -77,8 +79,9 @@ export default function RequestLogsPage() {
 
   const load = useCallback(async () => {
     try {
-      const list = await api.listLogs(500);
+      const { logs: list, hasMore: more } = await api.listLogs(500);
       setLogs(list);
+      setHasMore(more);
     } catch (e) {
       if (isUnauthorized(e)) {
         handleAuthFail();
@@ -91,6 +94,27 @@ export default function RequestLogsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 游标分页：把更早的一页追加到现有列表后面。 */
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const lastId = logs?.at(-1)?.id;
+    if (!lastId) return;
+    setLoadingMore(true);
+    try {
+      const { logs: list, hasMore: more } = await api.listLogs(500, lastId);
+      setLogs((prev) => [...(prev ?? []), ...list]);
+      setHasMore(more);
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        handleAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [logs, hasMore, loadingMore, handleAuthFail]);
 
   const filtered = useMemo(() => {
     if (!logs) return [];
@@ -137,7 +161,10 @@ export default function RequestLogsPage() {
           <CardTitle className="flex items-center gap-2 text-xl">
             <ReceiptText className="size-5 text-primary" /> 请求日志
           </CardTitle>
-          <CardDescription>最近 500 条代理请求流水，按时间倒序；点击行查看完整详情</CardDescription>
+          <CardDescription>
+            代理请求流水，每页 500 条、按时间倒序；点击行查看完整详情，
+            「查询更早日志」取更早的一页（保留期由后台设置决定）
+          </CardDescription>
           <div className="flex flex-col gap-3 pt-2 lg:flex-row lg:items-center">
             <div className="flex items-center gap-1 rounded-full bg-secondary/60 p-1">
               {(
@@ -280,6 +307,21 @@ export default function RequestLogsPage() {
               </TableBody>
             </Table>
           </div>
+
+          {logs !== null && hasMore && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore && <Loader2 className="size-4 animate-spin" />}
+                {loadingMore ? '加载中…' : '查询更早日志'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -144,6 +144,8 @@ export interface IUsageRecord {
 export interface IKeyUsage {
   summary: IUsageSummary;
   records: IUsageRecord[];
+  /** 是否还有更早的记录；把最后一条的 id 传给 before_id 取下一页。 */
+  has_more: boolean;
 }
 
 // ---- 上游块 ----

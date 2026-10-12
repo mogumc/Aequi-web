@@ -37,6 +37,7 @@ export default function KeyPortalPage() {
   const [self, setSelf] = useState<IKeySelf | null>(null);
   const [usage, setUsage] = useState<IKeyUsage | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -58,6 +59,32 @@ export default function KeyPortalPage() {
       setLoading(false);
     }
   }, [navigate]);
+
+  /** 游标分页：把更早的一页追加到现有记录后面。 */
+  const loadMore = useCallback(async () => {
+    if (!usage || loadingMore || !usage.has_more) return;
+    const lastId = usage.records.at(-1)?.id;
+    if (!lastId) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.keyUsage(50, lastId);
+      setUsage((prev) =>
+        prev
+          ? { ...next, records: [...prev.records, ...next.records] }
+          : next,
+      );
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearAccessKey();
+        toast.error('密钥已失效，请重新登录');
+        navigate('/login', { replace: true });
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : '加载失败，请稍后重试');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [usage, loadingMore, navigate]);
 
   useEffect(() => {
     load();
@@ -238,7 +265,9 @@ export default function KeyPortalPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">用量记录</CardTitle>
-            <CardDescription>最近 50 次请求；失败请求同样在列，token 与积分为 0。</CardDescription>
+            <CardDescription>
+              最近 50 次请求一页；失败请求同样在列，token 与积分为 0。
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading && !usage ? (
@@ -305,6 +334,23 @@ export default function KeyPortalPage() {
               </div>
             ) : (
               <p className="py-6 text-center text-sm text-muted-foreground">还没有用量记录</p>
+            )}
+
+            {usage?.has_more && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore ? (
+                    <RefreshCw className="size-4 animate-spin" />
+                  ) : null}
+                  {loadingMore ? '加载中…' : '查询更早日志'}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

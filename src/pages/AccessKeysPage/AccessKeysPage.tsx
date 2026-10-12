@@ -2,7 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
-import { Copy, Eye, EyeOff, KeyRound, Plus, Search } from 'lucide-react';
+import {
+  Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Plus,
+  ReceiptText,
+  Search,
+} from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,9 +56,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { IAccessKey } from '@/data/admin';
+import type { IAccessKey, IKeyUsage } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
-import { formatCredits, formatDateTime } from '@/lib/format';
+import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
 
 /**
  * 密钥白名单的选择器——**双层筛选**。
@@ -135,6 +144,9 @@ export default function AccessKeysPage() {
 
   const [deleteKey, setDeleteKey] = useState<IAccessKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+
+  // 用量视图
+  const [usageKey, setUsageKey] = useState<IAccessKey | null>(null);
 
   const handleAuthFail = useCallback(() => {
     clearToken();
@@ -436,6 +448,9 @@ export default function AccessKeysPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setUsageKey(k)}>
+                              用量
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
                                 setEditKey(k);
@@ -494,6 +509,17 @@ export default function AccessKeysPage() {
       >
         <Plus className="size-6" />
       </Button>
+
+      {/* 密钥用量（管理员视角，数据与门户同源） */}
+      {usageKey && (
+        <KeyUsageDialog
+          key={usageKey.id}
+          accessKey={usageKey}
+          open={usageKey !== null}
+          onOpenChange={(v) => !v && setUsageKey(null)}
+          onAuthFail={handleAuthFail}
+        />
+      )}
 
       {/* 新建密钥 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -690,5 +716,215 @@ export default function AccessKeysPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** 汇总统计的一小格。 */
+function UsageStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl bg-muted/40 px-3 py-2.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate text-lg font-medium tabular-nums" title={value}>
+        {value}
+      </p>
+      {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * 管理端查看某把访问密钥的用量。
+ *
+ * 数据与密钥门户同源（`/api/keys/{id}/usage`，结构一致），只是走管理员
+ * 认证、可以看任意一把——省得管理员为了核对用量还要拿密钥登一次门户。
+ * 大数从 K 起缩写，精确值看悬停；明细游标分页，「查询更多」往后翻。
+ */
+function KeyUsageDialog({
+  accessKey,
+  open,
+  onOpenChange,
+  onAuthFail,
+}: {
+  accessKey: IAccessKey;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onAuthFail: () => void;
+}) {
+  const [usage, setUsage] = useState<IKeyUsage | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const load = useCallback(async () => {
+    setUsage(null);
+    try {
+      setUsage(await api.keyUsageOf(accessKey.id, 50));
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        onAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
+    }
+  }, [accessKey.id, onAuthFail]);
+
+  useEffect(() => {
+    if (open) void load();
+  }, [open, load]);
+
+  const loadMore = useCallback(async () => {
+    if (!usage || loadingMore || !usage.has_more) return;
+    const lastId = usage.records.at(-1)?.id;
+    if (!lastId) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.keyUsageOf(accessKey.id, 50, lastId);
+      setUsage((prev) => (prev ? { ...next, records: [...prev.records, ...next.records] } : next));
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        onAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [usage, loadingMore, accessKey.id, onAuthFail]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0 rounded-2xl sm:max-w-3xl">
+        <DialogHeader className="shrink-0 pb-2">
+          <DialogTitle className="flex items-center gap-2">
+            <ReceiptText className="size-5 text-primary" /> 密钥用量 ·{' '}
+            {accessKey.name || '未命名'}
+          </DialogTitle>
+          <DialogDescription>
+            前缀 {accessKey.key_prefix}… 的全部用量记录（保留期内的都可翻阅）
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {usage ? (
+              <>
+                <UsageStat
+                  label="请求次数"
+                  value={formatCompact(usage.summary.requests)}
+                  hint={usage.summary.failed > 0 ? `失败 ${usage.summary.failed}` : '全部成功'}
+                />
+                <UsageStat
+                  label="消耗 token"
+                  value={formatCompact(usage.summary.final_tokens)}
+                  hint={`原始 ${usage.summary.raw_tokens.toLocaleString('zh-CN')}`}
+                />
+                <UsageStat label="累计消耗" value={formatCompact(usage.summary.credits)} hint="积分" />
+                <UsageStat
+                  label="剩余额度"
+                  value={accessKey.unlimited ? '无限' : formatCompact(accessKey.credits)}
+                  hint={accessKey.unlimited ? '消耗仍然照记' : '积分'}
+                />
+              </>
+            ) : (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-xl" />
+              ))
+            )}
+          </div>
+
+          {usage && usage.records.length > 0 ? (
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">时间</TableHead>
+                    <TableHead className="whitespace-nowrap">模型</TableHead>
+                    <TableHead className="whitespace-nowrap">输入</TableHead>
+                    <TableHead className="whitespace-nowrap">输出</TableHead>
+                    <TableHead className="whitespace-nowrap">缓存</TableHead>
+                    <TableHead className="whitespace-nowrap">积分</TableHead>
+                    <TableHead className="whitespace-nowrap">状态</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {usage.records.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(record.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="block max-w-[180px] truncate font-mono text-xs">
+                          {record.model}
+                        </span>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {record.prompt_tokens}
+                        {record.estimated && (
+                          <span className="ml-1 text-xs text-muted-foreground/70">*</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="tabular-nums">{record.completion_tokens}</TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {record.cache_tokens}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {formatCredits(record.credits)}
+                      </TableCell>
+                      <TableCell>
+                        {record.status === 'success' ? (
+                          <Badge
+                            variant="outline"
+                            className="rounded-full bg-success/15 text-success"
+                          >
+                            成功
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="destructive" className="shrink-0 rounded-full">
+                              失败
+                            </Badge>
+                            {record.error && (
+                              <span
+                                className="max-w-40 truncate text-xs text-muted-foreground"
+                                title={record.error}
+                              >
+                                {record.error}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : usage ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              这把密钥还没有任何用量记录
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {[0, 1, 2].map((row) => (
+                <Skeleton key={row} className="h-9 w-full" />
+              ))}
+            </div>
+          )}
+
+          {usage?.has_more && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore && <Loader2 className="size-4 animate-spin" />}
+                {loadingMore ? '加载中…' : '查询更早日志'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

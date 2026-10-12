@@ -87,8 +87,9 @@ export function setProfile(account: IAdminAccount): void {
 /**
  * 访问密钥登录（密钥自助视图）。
  *
- * 与管理员的登录令牌**互斥**：同一个浏览器同时只保留一种身份，
- * 登录任一侧时清掉另一侧，避免请求带着身份不明两把凭证。
+ * 与管理员的登录令牌**各自独立存放、互不干扰**：同一个浏览器可以同时
+ * 保留两种身份——管理端请求带管理员令牌，门户（`/api/key/*`）请求带
+ * 访问密钥，由 [`request`] 的作用域参数区分，不存在互相顶掉的问题。
  */
 export function getAccessKey(): string | null {
   return readItem(ACCESS_KEY_KEY);
@@ -115,10 +116,17 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** 凭证作用域：管理端请求带管理员令牌，门户请求带访问密钥。 */
+export type AuthScope = 'admin' | 'portal';
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  scope: AuthScope = 'admin',
+): Promise<T> {
   const headers = new Headers(init?.headers);
-  // 管理员令牌与访问密钥同时只会存在一个（见 setAccessKey 的说明）。
-  const credential = getToken() ?? getAccessKey();
+  // 两种身份独立存放，按调用方的作用域取对应的凭证。
+  const credential = scope === 'portal' ? getAccessKey() : getToken();
   if (credential) headers.set('Authorization', `Bearer ${credential}`);
   if (init?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -160,9 +168,14 @@ export const api = {
   /** 可用的第三方登录方式；后端没提供时返回空数组。 */
   providers: () => request<IProvider[]>('/api/auth/providers'),
 
-  // ---- 访问密钥自助（用访问密钥认证，只能看到自己）----
-  keyMe: () => request<IKeySelf>('/api/key/me'),
-  keyUsage: (limit = 50) => request<IKeyUsage>(`/api/key/usage?limit=${limit}`),
+  // ---- 访问密钥自助（门户专属作用域：带的是访问密钥，与管理端会话无关）----
+  keyMe: () => request<IKeySelf>('/api/key/me', undefined, 'portal'),
+  keyUsage: (limit = 50, beforeId?: number) =>
+    request<IKeyUsage>(
+      `/api/key/usage?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ''}`,
+      undefined,
+      'portal',
+    ),
 
   // ---- 认证与会话 ----
   login: (body: { username: string; password: string; otp?: string }) =>
@@ -293,11 +306,21 @@ export const api = {
 
   // ---- 请求日志 ----
   /**
-   * 请求日志。后端把数组包在 `logs` 字段里（响应体是个对象），
-   * 这里解包成数组，调用方直接当列表用。
+   * 请求日志（游标分页）。
+   *
+   * 返回 `{ logs, hasMore }`——`hasMore` 为真时把上一页最后一条的 `id`
+   * 传进 `beforeId` 即可取更早的一页。
    */
-  listLogs: async (limit = 500) => {
-    const res = await request<{ logs: IRequestLog[] }>(`/api/logs?limit=${limit}`);
-    return res.logs;
+  listLogs: async (limit = 500, beforeId?: number) => {
+    const res = await request<{ logs: IRequestLog[]; has_more: boolean }>(
+      `/api/logs?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ''}`,
+    );
+    return { logs: res.logs, hasMore: res.has_more };
   },
+
+  // ---- 管理端查看某把访问密钥的用量（结构与门户一致，走管理员认证）----
+  keyUsageOf: (id: string, limit = 50, beforeId?: number) =>
+    request<IKeyUsage>(
+      `/api/keys/${id}/usage?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ''}`,
+    ),
 };

@@ -65,9 +65,9 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const [k, l] = await Promise.all([api.listKeys(), api.listLogs(500)]);
+      const [k, { logs }] = await Promise.all([api.listKeys(), api.listLogs(500)]);
       setKeys(k.keys);
-      setLogs(l);
+      setLogs(logs);
     } catch (e) {
       if (isUnauthorized(e)) {
         clearToken();
