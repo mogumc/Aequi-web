@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FlaskConical, Network, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
+import {
+  Copy,
+  Eye,
+  EyeOff,
+  FlaskConical,
+  Loader2,
+  Network,
+  Pause,
+  Play,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +57,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { VirtualList } from '@/components/virtual-list';
 import {
   type IBlockInput,
   type IBlockModel,
@@ -73,6 +86,10 @@ function BlockKeysDialog({
   const [secretsText, setSecretsText] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // 密钥展示：默认只露前缀，点击眼睛展开完整明文（管理员本就可取回）。
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  // 一键测试全部：前端按顺序逐把发送，进度 {done, total} 驱动按钮文案。
+  const [testAll, setTestAll] = useState<{ done: number; total: number } | null>(null);
 
   const blockId = block?.id ?? '';
 
@@ -153,6 +170,26 @@ function BlockKeysDialog({
     }
   };
 
+  /**
+   * 一键测试全部：前端按顺序逐把发送单把测试请求，不需要后端批量接口。
+   * 单把失败（网络抖动等）不中断整轮，最终状态以刷新后的落库结果为准。
+   */
+  const onTestAll = async () => {
+    if (!blockId || testAll !== null || keys === null || keys.length === 0) return;
+    setTestAll({ done: 0, total: keys.length });
+    for (const k of keys) {
+      try {
+        await api.testBlockKey(blockId, k.id);
+      } catch {
+        // 单把失败不算整轮失败，坏密钥会被测试接口自动停用。
+      }
+      setTestAll((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+    }
+    toast.success('整块测试完成，最新状态已落库');
+    setTestAll(null);
+    void loadKeys();
+  };
+
   const onAdd = async () => {
     if (!blockId || adding) return;
     const secrets = secretsText
@@ -200,118 +237,167 @@ function BlockKeysDialog({
     return <Badge variant="destructive" className="rounded-full">已停用</Badge>;
   };
 
+  /** 密钥展示：默认只露前缀，悬停看错误信息；眼睛展开完整明文。 */
+  const secretView = (k: IUpstreamKey) => {
+    const revealed = revealedId === k.id;
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <code
+          className="min-w-0 flex-1 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
+          title={k.last_error ?? (revealed ? k.secret : '点击右侧眼睛查看完整密钥')}
+        >
+          {revealed ? k.secret : `${k.secret.slice(0, 12)}…`}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 rounded-full text-muted-foreground"
+          onClick={() => setRevealedId((prev) => (prev === k.id ? null : k.id))}
+          aria-label={revealed ? '隐藏完整密钥' : '查看完整密钥'}
+        >
+          {revealed ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 rounded-full text-muted-foreground"
+          onClick={() => {
+            void copyToClipboard(k.secret);
+            toast.success('已复制完整密钥');
+          }}
+          aria-label="复制密钥"
+        >
+          <Copy className="size-3.5" />
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] flex-col rounded-2xl sm:max-w-2xl">
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle>块内密钥 · {block?.name}</DialogTitle>
           <DialogDescription>
             密钥生命周期自治：成功清零失败计数、429 退避 30 秒、连续失败 3 次自动停用
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          <div className="w-full overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">密钥</TableHead>
-                  <TableHead className="whitespace-nowrap">状态</TableHead>
-                  <TableHead className="whitespace-nowrap">失败次数</TableHead>
-                  <TableHead className="whitespace-nowrap">最近使用</TableHead>
-                  <TableHead className="whitespace-nowrap text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keys === null ? (
-                  Array.from({ length: 2 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={5}>
-                        <Skeleton className="h-8 w-full rounded-lg" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : keys.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                      该块暂无上游密钥，请在下方添加
-                    </TableCell>
-                  </TableRow>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {keys !== null && keys.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">共 {keys.length} 条密钥</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-8 rounded-full text-xs"
+                disabled={testAll !== null || busyId !== null}
+                onClick={() => void onTestAll()}
+              >
+                {testAll ? (
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  keys.map((k) => (
-                    <TableRow key={k.id}>
-                      <TableCell>
-                        <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">
-                          {k.secret.slice(0, 12)}…
-                        </code>
-                        {k.last_error && (
-                          <p className="mt-1 max-w-[200px] truncate text-xs text-destructive">
-                            {k.last_error}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>{statusBadge(k.status)}</TableCell>
-                      <TableCell className="tabular-nums">{k.failure_count}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {k.last_used_at ? formatDateTime(k.last_used_at) : '从未'}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-8 rounded-full"
-                            disabled={busyId === k.id}
-                            onClick={() => void onTest(k.id)}
-                            aria-label="测试密钥"
-                          >
-                            {busyId === k.id ? (
-                              <RefreshCw className="size-4 animate-spin" />
-                            ) : (
-                              <FlaskConical className="size-4" />
-                            )}
-                          </Button>
-                          {k.status === 'paused' ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="size-8 rounded-full"
-                              disabled={busyId === k.id}
-                              onClick={() => void batchAction('resume', k.id, '已恢复该密钥')}
-                              aria-label="恢复"
-                            >
-                              <Play className="size-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="size-8 rounded-full"
-                              disabled={busyId === k.id}
-                              onClick={() => void batchAction('pause', k.id, '已暂停该密钥')}
-                              aria-label="暂停"
-                            >
-                              <Pause className="size-4" />
-                            </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-8 rounded-full text-destructive"
-                            disabled={busyId === k.id}
-                            onClick={() => void batchAction('remove', k.id, '已移除该密钥')}
-                            aria-label="移除"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  <FlaskConical className="size-3.5" />
                 )}
-              </TableBody>
-            </Table>
-          </div>
+                {testAll ? `测试中 ${testAll.done}/${testAll.total}` : '一键测试全部'}
+              </Button>
+            </div>
+          )}
+
+          {keys === null ? (
+            <div className="space-y-2">
+              {[0, 1].map((row) => (
+                <Skeleton key={row} className="h-12 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {keys.length > 0 && (
+                <div className="flex items-center gap-2 border-b border-border/60 px-2.5 pb-1.5 text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1">密钥</span>
+                  <span className="w-16 shrink-0">状态</span>
+                  <span className="w-12 shrink-0 text-center">失败</span>
+                  <span className="w-28 shrink-0">最近使用</span>
+                  <span className="w-[100px] shrink-0 text-right">操作</span>
+                </div>
+              )}
+              <VirtualList
+                items={keys}
+                itemHeight={56}
+                maxHeight={360}
+                getItemKey={(k) => k.id}
+                empty={
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    该块暂无上游密钥，请在下方添加
+                  </p>
+                }
+                renderItem={(k) => (
+                  <div className="flex h-12 w-full items-center gap-2 rounded-lg border border-border/60 px-2.5">
+                    {secretView(k)}
+                    <div className="w-16 shrink-0">{statusBadge(k.status)}</div>
+                    <span
+                      className="w-12 shrink-0 text-center text-xs tabular-nums text-muted-foreground"
+                      title={k.failure_count > 0 ? '连续失败次数' : undefined}
+                    >
+                      {k.failure_count}
+                    </span>
+                    <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">
+                      {k.last_used_at ? formatDateTime(k.last_used_at) : '从未'}
+                    </span>
+                    <div className="flex w-[100px] shrink-0 justify-end gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 rounded-full"
+                        disabled={busyId === k.id || testAll !== null}
+                        onClick={() => void onTest(k.id)}
+                        aria-label="测试密钥"
+                      >
+                        {busyId === k.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <FlaskConical className="size-4" />
+                        )}
+                      </Button>
+                      {k.status === 'paused' ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7 rounded-full"
+                          disabled={busyId === k.id || testAll !== null}
+                          onClick={() => void batchAction('resume', k.id, '已恢复该密钥')}
+                          aria-label="恢复"
+                        >
+                          <Play className="size-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7 rounded-full"
+                          disabled={busyId === k.id || testAll !== null}
+                          onClick={() => void batchAction('pause', k.id, '已暂停该密钥')}
+                          aria-label="暂停"
+                        >
+                          <Pause className="size-4" />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 rounded-full text-destructive"
+                        disabled={busyId === k.id || testAll !== null}
+                        onClick={() => void batchAction('remove', k.id, '已移除该密钥')}
+                        aria-label="移除"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              />
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="add-secrets">批量添加密钥（每行一条）</Label>

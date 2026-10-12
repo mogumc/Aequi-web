@@ -157,9 +157,15 @@ async function request<T>(
   return JSON.parse(text) as T;
 }
 
-/** 401 / unauthorized 时返回 true（调用方应清除 token 并跳转登录页） */
+/** 401 / unauthorized 时返回 true（调用方应清除 token 并跳转登录页）。
+ *
+ * 验证码输错（invalid_totp）虽然历史上也返回 401，但那是「输入错了」
+ * 而不是「会话过期」，绝不能据此把人踢出登录——这里按 type 双保险排除。
+ */
 export function isUnauthorized(e: unknown): boolean {
-  return e instanceof ApiError && (e.status === 401 || e.type === 'unauthorized');
+  if (!(e instanceof ApiError)) return false;
+  if (e.type === 'invalid_totp') return false;
+  return e.status === 401 || e.type === 'unauthorized';
 }
 
 export const api = {

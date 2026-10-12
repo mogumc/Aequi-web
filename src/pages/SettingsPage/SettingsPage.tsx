@@ -344,6 +344,11 @@ export default function SettingsPage() {
 
   const onDisableOtp = async () => {
     if (otpBusy) return;
+    // 关闭两步验证必须验证验证器——可选只是表单写错了，后端从来没收过空的。
+    if (disableCode.trim().length < 6) {
+      toast.error('请输入当前 6 位验证码');
+      return;
+    }
     setOtpBusy(true);
     try {
       await api.disableOtp(disableCode.trim() || undefined);
@@ -676,6 +681,7 @@ export default function SettingsPage() {
                   <TableRow>
                     <TableHead className="whitespace-nowrap">设备（令牌前缀）</TableHead>
                     <TableHead className="whitespace-nowrap">IP</TableHead>
+                    <TableHead className="whitespace-nowrap">登录方式</TableHead>
                     <TableHead className="whitespace-nowrap">最近在线</TableHead>
                     <TableHead className="whitespace-nowrap">状态</TableHead>
                     <TableHead className="whitespace-nowrap text-right">操作</TableHead>
@@ -684,13 +690,13 @@ export default function SettingsPage() {
                 <TableBody>
                   {devices === null ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         设备列表不可用（后端未连接）
                       </TableCell>
                     </TableRow>
                   ) : devices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         暂无在线设备记录
                       </TableCell>
                     </TableRow>
@@ -705,7 +711,20 @@ export default function SettingsPage() {
                             {d.user_agent}
                           </p>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap font-mono text-xs">{d.ip}</TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {d.ip || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {d.login_type.includes('totp') ? (
+                            <Badge variant="outline" className="rounded-full">
+                              密码 + 验证码
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="rounded-full">
+                              密码
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">
                           {formatDateTime(d.last_seen_at)}
                         </TableCell>
@@ -754,26 +773,32 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* 关闭 OTP */}
+      {/* 关闭 OTP：必须验证验证器——直接关是 CLI（disable-otp）的权限，
+          网页入口与后端同一口径，验证码必填且必须正确 */}
       <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
         <DialogContent className="rounded-2xl sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>关闭两步验证</DialogTitle>
-            <DialogDescription>如验证器仍可用，建议输入当前验证码确认操作</DialogDescription>
+            <DialogDescription>请输入当前验证码确认操作；验证码错误将无法关闭</DialogDescription>
           </DialogHeader>
           <Input
             inputMode="numeric"
             maxLength={6}
             value={disableCode}
             onChange={(e) => setDisableCode(e.target.value)}
-            placeholder="验证码（可选）"
+            placeholder="6 位验证码"
             className="rounded-lg font-mono tracking-[0.3em]"
           />
           <DialogFooter>
             <Button variant="ghost" className="rounded-full" onClick={() => setDisableOpen(false)}>
               取消
             </Button>
-            <Button variant="destructive" className="rounded-full" disabled={otpBusy} onClick={() => void onDisableOtp()}>
+            <Button
+              variant="destructive"
+              className="rounded-full"
+              disabled={otpBusy || disableCode.trim().length < 6}
+              onClick={() => void onDisableOtp()}
+            >
               {otpBusy ? '处理中…' : '确认关闭'}
             </Button>
           </DialogFooter>

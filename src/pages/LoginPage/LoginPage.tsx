@@ -41,7 +41,9 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [needOtp, setNeedOtp] = useState(false);
+  // 两步验证阶段：账号密码已通过校验（后端返回 totp_required），
+  // 隐藏账号密码输入、只显示验证码框——追加输入框会把内容区撑出卡片。
+  const [otpStage, setOtpStage] = useState(false);
   const [otpInvalid, setOtpInvalid] = useState(false);
 
   const [accessKey, setAccessKeyInput] = useState('');
@@ -64,7 +66,9 @@ export default function LoginPage() {
   const switchPage = (next: Page) => {
     setPage(next);
     setError('');
+    setOtpStage(false);
     setOtpInvalid(false);
+    setOtp('');
   };
 
   const onAdminLogin = async (e: FormEvent) => {
@@ -77,7 +81,7 @@ export default function LoginPage() {
       const res = await api.login({
         username,
         password,
-        otp: needOtp && otp ? otp : undefined,
+        otp: otpStage && otp ? otp : undefined,
       });
       // 两种身份独立存放：管理端登录不再清门户的访问密钥，
       // 同一浏览器里两边可以共存（请求按作用域各带各的凭证）。
@@ -93,10 +97,10 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.type === 'totp_required') {
-          setNeedOtp(true);
+          setOtpStage(true);
           setError('该账号已启用两步验证，请输入验证码');
         } else if (err.type === 'invalid_totp') {
-          setNeedOtp(true);
+          setOtpStage(true);
           setOtpInvalid(true);
           setError(err.message);
         } else {
@@ -169,36 +173,43 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* 内容区高度固定：两页内容量不同，定高之后切换时卡片外框不动 */}
-          <div className="flex h-[272px] flex-col justify-center p-6 md:p-8">
+          {/* 内容区最小高度：两页内容量不同，min-h 保证切换时外框不收缩；
+              内容超出时自然增长，不做裁剪——定高会把表单两端挤出卡片 */}
+          <div className="flex min-h-[272px] flex-col justify-center p-6 md:p-8">
             {page === 'admin' ? (
               <form onSubmit={onAdminLogin} className="space-y-5" noValidate>
-                <div className="space-y-2">
-                  <Label htmlFor="username">用户名</Label>
-                  <Input
-                    id="username"
-                    autoComplete="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 rounded-lg"
-                    placeholder="管理员用户名"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">密码</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 rounded-lg"
-                    placeholder="管理员密码"
-                    required
-                  />
-                </div>
-                {needOtp && (
+                {/* 账号密码只在第一阶段显示：验证通过进入验证码阶段后隐藏，
+                    免得追加的输入框把内容区撑出卡片 */}
+                {!otpStage && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="username">用户名</Label>
+                      <Input
+                        id="username"
+                        autoComplete="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="h-12 rounded-lg"
+                        placeholder="管理员用户名"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">密码</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="h-12 rounded-lg"
+                        placeholder="管理员密码"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+                {otpStage && (
                   <div className="space-y-2">
                     <Label htmlFor="otp">两步验证码</Label>
                     <Input
@@ -213,12 +224,19 @@ export default function LoginPage() {
                       placeholder="6 位验证码"
                       maxLength={6}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      账号密码已通过，请输入验证器 App 中的 6 位验证码
+                    </p>
                   </div>
                 )}
-                {error && <p className="text-sm text-destructive">{error}</p>}
+                {/* 错误信息区预留一行高度：出现/消失都不顶动上下布局 */}
+                <p className="min-h-5 text-sm text-destructive">{error}</p>
                 <Button
                   type="submit"
-                  disabled={submitting || !username || !password || (needOtp && !otp)}
+                  disabled={
+                    submitting ||
+                    (otpStage ? !otp || otp.length < 6 : !username || !password)
+                  }
                   className="h-12 w-full rounded-full text-base"
                 >
                   {submitting ? '登录中…' : '登录'}
@@ -242,7 +260,8 @@ export default function LoginPage() {
                     密钥由管理员发放；登录后只能看到这把密钥自己的余额与用量。
                   </p>
                 </div>
-                {error && <p className="text-sm text-destructive">{error}</p>}
+                {/* 同上：预留一行，避免报错时把表单顶开 */}
+                <p className="min-h-5 text-sm text-destructive">{error}</p>
                 <Button
                   type="submit"
                   disabled={submitting || !accessKey.trim()}

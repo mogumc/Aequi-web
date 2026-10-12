@@ -16,67 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { VirtualList } from '@/components/virtual-list';
 import type { IBlockModel } from '@/data/admin';
 import { MULTIPLIER_SCALE, formatMultiplier, parseMultiplier } from '@/lib/multiplier';
 
-/** 列表单行高度与最大可视高度（超过即虚拟滚动，只渲染可视窗口）。 */
+/** 列表单行高度。 */
 const AVAILABLE_ROW_HEIGHT = 36;
 const MODEL_ROW_HEIGHT = 48;
-const LIST_MAX_HEIGHT = 240;
-
-/**
- * 轻量虚拟滚动列表：行高固定，滚动时只渲染可视窗口 ± overscan。
- * 块的模型动辄上百条，普通渲染会拖慢弹窗；这里不引依赖，够用就好。
- */
-function VirtualList<T>({
-  items,
-  itemHeight,
-  getItemKey,
-  renderItem,
-  empty,
-  resetKey,
-  overscan = 8,
-}: {
-  items: T[];
-  itemHeight: number;
-  getItemKey: (item: T, index: number) => string;
-  renderItem: (item: T, index: number) => React.ReactNode;
-  empty?: React.ReactNode;
-  /** 变化时重置滚动位置（比如筛选词换了） */
-  resetKey?: string;
-  overscan?: number;
-}) {
-  const [scrollTop, setScrollTop] = useState(0);
-  if (items.length === 0) return <>{empty ?? null}</>;
-
-  const height = Math.min(LIST_MAX_HEIGHT, items.length * itemHeight);
-  const start = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
-  const end = Math.min(items.length, start + Math.ceil(height / itemHeight) + overscan * 2);
-
-  return (
-    <div
-      key={resetKey}
-      className="overflow-y-auto"
-      style={{ height }}
-      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-    >
-      <div className="relative" style={{ height: items.length * itemHeight }}>
-        {items.slice(start, end).map((item, i) => {
-          const index = start + i;
-          return (
-            <div
-              key={getItemKey(item, index)}
-              className="absolute right-0 left-0 flex items-center"
-              style={{ top: index * itemHeight, height: itemHeight }}
-            >
-              {renderItem(item, index)}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 /**
  * 块的模型编辑器。
