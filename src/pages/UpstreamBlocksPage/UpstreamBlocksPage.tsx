@@ -55,9 +55,7 @@ import { ApiError, api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { ModelEditor } from '@/components/model-editor';
 
-/** 上游 API 格式。gemini 是 generateContent 端点（经典形态），
- *  google 是 Interactions API（新版，多轮工具受签名校验限制）。 */
-const API_FORMATS = ['openai', 'google', 'gemini', 'anthropic'] as const;
+const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
 
 /** 块内密钥管理对话框 */
 function BlockKeysDialog({
