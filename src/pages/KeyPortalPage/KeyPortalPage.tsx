@@ -202,12 +202,16 @@ export default function KeyPortalPage() {
           </CardContent>
         </Card>
 
-        {/* token 分项汇总：三条明细都记在每条用量里，这里给累计视角 */}
+        {/* token 分项汇总：三条明细都记在每条用量里，这里给累计视角。
+            「累计」实际是保留期窗口内的累计（过期记录被回收会回退），
+            窗口长度从后端 settings 带下来。 */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">累计 token</CardTitle>
             <CardDescription>
-              全部用量记录的聚合；缓存为命中缓存的输入部分，已包含在输入内
+              {usage?.retention_days
+                ? `最近 ${usage.retention_days} 天的用量聚合；缓存为命中缓存的输入部分，已包含在输入内`
+                : '全部用量记录的聚合；缓存为命中缓存的输入部分，已包含在输入内'}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm sm:grid-cols-4">

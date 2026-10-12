@@ -798,7 +798,7 @@ function KeyUsageDialog({
             {accessKey.name || '未命名'}
           </DialogTitle>
           <DialogDescription>
-            前缀 {accessKey.key_prefix}… 的全部用量记录（保留期内的都可翻阅）
+            前缀 {accessKey.key_prefix}…；{usage?.retention_days ? `最近 ${usage.retention_days} 天内的` : ''}用量记录，更早的已按保留期回收
           </DialogDescription>
         </DialogHeader>
 

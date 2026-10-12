@@ -146,6 +146,8 @@ export interface IKeyUsage {
   records: IUsageRecord[];
   /** 是否还有更早的记录；把最后一条的 id 传给 before_id 取下一页。 */
   has_more: boolean;
+  /** 日志保留天数——汇总与明细都只是这段窗口内的数据。 */
+  retention_days?: number;
 }
 
 // ---- 上游块 ----
