@@ -114,6 +114,12 @@ export interface IUsageSummary {
   failed: number;
   raw_tokens: number;
   final_tokens: number;
+  /** 累计输入 token（含缓存命中的部分）。 */
+  prompt_tokens: number;
+  /** 累计输出 token。 */
+  completion_tokens: number;
+  /** 累计命中缓存的输入 token。 */
+  cache_tokens: number;
   credits: string;
   credits_scaled: number;
 }

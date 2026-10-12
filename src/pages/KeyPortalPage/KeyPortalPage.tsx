@@ -125,7 +125,12 @@ export default function KeyPortalPage() {
           <StatCard
             title="消耗 token"
             value={usage ? formatCompact(usage.summary.final_tokens) : null}
-            hint={usage ? `原始 ${formatCompact(usage.summary.raw_tokens)}` : undefined}
+            // 「原始」按语义展示完整数值：超宽时省略号截断，悬停看全。
+            hint={
+              usage
+                ? `原始 ${usage.summary.raw_tokens.toLocaleString('zh-CN')}`
+                : undefined
+            }
             exact={
               usage
                 ? `${usage.summary.final_tokens}（原始 ${usage.summary.raw_tokens}）`
@@ -166,6 +171,54 @@ export default function KeyPortalPage() {
             </Field>
             <Field label="最后使用">
               {self?.last_used_at ? formatDateTime(self.last_used_at) : '从未使用'}
+            </Field>
+          </CardContent>
+        </Card>
+
+        {/* token 分项汇总：三条明细都记在每条用量里，这里给累计视角 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">累计 token</CardTitle>
+            <CardDescription>
+              全部用量记录的聚合；缓存为命中缓存的输入部分，已包含在输入内
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
+            <Field label="输入">
+              {usage ? (
+                <span
+                  className="tabular-nums"
+                  title={usage.summary.prompt_tokens.toLocaleString('zh-CN')}
+                >
+                  {formatCompact(usage.summary.prompt_tokens)}
+                </span>
+              ) : (
+                <Skeleton className="h-5 w-16" />
+              )}
+            </Field>
+            <Field label="输出">
+              {usage ? (
+                <span
+                  className="tabular-nums"
+                  title={usage.summary.completion_tokens.toLocaleString('zh-CN')}
+                >
+                  {formatCompact(usage.summary.completion_tokens)}
+                </span>
+              ) : (
+                <Skeleton className="h-5 w-16" />
+              )}
+            </Field>
+            <Field label="缓存命中">
+              {usage ? (
+                <span
+                  className="tabular-nums"
+                  title={usage.summary.cache_tokens.toLocaleString('zh-CN')}
+                >
+                  {formatCompact(usage.summary.cache_tokens)}
+                </span>
+              ) : (
+                <Skeleton className="h-5 w-16" />
+              )}
             </Field>
           </CardContent>
         </Card>
@@ -263,7 +316,12 @@ function StatCard({
             {value}
           </p>
         )}
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {hint && (
+          // 数值超宽时省略号截断，悬停看完整值
+          <p className="mt-1 truncate text-xs text-muted-foreground" title={hint}>
+            {hint}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
