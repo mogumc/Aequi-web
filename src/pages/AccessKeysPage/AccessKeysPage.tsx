@@ -521,9 +521,9 @@ export default function AccessKeysPage() {
         />
       )}
 
-      {/* 新建密钥 */}
+      {/* 新建密钥（含模型白名单多选，与编辑弹窗同宽） */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>新建访问密钥</DialogTitle>
             <DialogDescription>创建后仅本次展示完整密钥明文，请立即保存</DialogDescription>
@@ -576,9 +576,9 @@ export default function AccessKeysPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 密钥明文仅显示一次 */}
+      {/* 密钥明文仅显示一次（44 字符 mono，lg 才放得下一行） */}
       <Dialog open={createdSecret !== null} onOpenChange={(v) => !v && setCreatedSecret(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
+        <DialogContent className="rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>请保存密钥明文</DialogTitle>
             <DialogDescription>关闭后将无法再次查看完整密钥</DialogDescription>
@@ -642,7 +642,7 @@ export default function AccessKeysPage() {
 
       {/* 调整额度 */}
       <Dialog open={creditKey !== null} onOpenChange={(v) => !v && setCreditKey(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
+        <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>重置余额</DialogTitle>
             <DialogDescription>
@@ -687,7 +687,7 @@ export default function AccessKeysPage() {
 
       {/* 删除密钥（输入名称二次确认） */}
       <Dialog open={deleteKey !== null} onOpenChange={(v) => !v && setDeleteKey(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
+        <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>删除密钥</DialogTitle>
             <DialogDescription>

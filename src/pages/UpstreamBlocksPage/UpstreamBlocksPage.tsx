@@ -819,9 +819,9 @@ export default function UpstreamBlocksPage() {
         onAuthFail={handleAuthFail}
       />
 
-      {/* 删除上游 */}
+      {/* 删除上游（描述含块名与密钥数，md 保证不折行溢出） */}
       <Dialog open={deleteBlock !== null} onOpenChange={(v) => !v && setDeleteBlock(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
+        <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>删除上游块</DialogTitle>
             <DialogDescription>
