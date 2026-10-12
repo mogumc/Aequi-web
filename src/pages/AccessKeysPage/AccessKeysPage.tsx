@@ -603,9 +603,9 @@ export default function AccessKeysPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 编辑密钥 */}
+      {/* 编辑密钥（含模型白名单多选，条目是「块/模型」全名，窄了会挤） */}
       <Dialog open={editKey !== null} onOpenChange={(v) => !v && setEditKey(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>编辑密钥</DialogTitle>
             <DialogDescription>{editKey?.key_prefix}…</DialogDescription>
@@ -646,7 +646,7 @@ export default function AccessKeysPage() {
           <DialogHeader>
             <DialogTitle>重置余额</DialogTitle>
             <DialogDescription>
-              将「{creditKey?.name}」的剩余额度直接重置为新值（POST /api/keys/{creditKey?.id}/credits）
+              将「{creditKey?.name}」的剩余额度直接重置为新值
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
