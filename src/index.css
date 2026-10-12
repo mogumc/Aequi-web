@@ -3,3 +3,16 @@
 @import "tw-animate-css";
 @import "./tailwind-theme.css";
 @import "./typography.css";
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #dbd0dd;
+    border-radius: 20px;
+}
+
+::-webkit-scrollbar-track {
+    background: #00000000;
+}

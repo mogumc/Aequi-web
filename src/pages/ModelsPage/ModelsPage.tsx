@@ -248,7 +248,7 @@ export default function ModelsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="whitespace-nowrap">模型</TableHead>
-                  <TableHead className="whitespace-nowrap">数量</TableHead>
+                  <TableHead className="whitespace-nowrap" title="提供该模型的上游块数量">上游数</TableHead>
                   <TableHead className="w-10" aria-label="展开" />
                 </TableRow>
               </TableHeader>
@@ -278,21 +278,8 @@ export default function ModelsPage() {
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => toggle(name)}
                         >
-                          <TableCell className="font-medium">
-                            <span className="flex items-center gap-2">
-                              <span>{name}</span>
-                              {list.length > 1 && (
-                                <Badge variant="outline" title={`有 ${list.length} 个块提供该模型`}>
-                                  {list.length} 个块
-                                </Badge>
-                              )}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {list.length === 1
-                              ? list[0].blockName
-                              : `${list.length} 个块提供，点击展开`}
-                          </TableCell>
+                          <TableCell className="font-medium">{name}</TableCell>
+                          <TableCell className="tabular-nums">{list.length}</TableCell>
                           <TableCell className="text-right">
                             {isOpen ? (
                               <ChevronDown className="ml-auto size-4 text-muted-foreground" />
