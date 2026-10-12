@@ -152,7 +152,7 @@ export interface IBlockModel {
 export interface IBlockInput {
   id?: string;
   name: string;
-  api_format: 'openai' | 'google' | 'gemini' | 'anthropic';
+  api_format: 'openai' | 'google' | 'anthropic';
   weight: number;
   base_url: string;
   proxy: string | null;
@@ -162,7 +162,7 @@ export interface IBlockInput {
 export interface IUpstreamBlock {
   id: string;
   name: string;
-  api_format: 'openai' | 'google' | 'gemini' | 'anthropic';
+  api_format: 'openai' | 'google' | 'anthropic';
   weight: number;
   base_url: string;
   proxy: string | null;
