@@ -183,7 +183,7 @@ export default function KeyPortalPage() {
               全部用量记录的聚合；缓存为命中缓存的输入部分，已包含在输入内
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
+          <CardContent className="grid gap-4 text-sm sm:grid-cols-4">
             <Field label="输入">
               {usage ? (
                 <span
@@ -215,6 +215,18 @@ export default function KeyPortalPage() {
                   title={usage.summary.cache_tokens.toLocaleString('zh-CN')}
                 >
                   {formatCompact(usage.summary.cache_tokens)}
+                </span>
+              ) : (
+                <Skeleton className="h-5 w-16" />
+              )}
+            </Field>
+            <Field label="缓存率">
+              {usage ? (
+                // 缓存命中占输入 token 的比例，前端直接算。
+                <span className="tabular-nums" title="缓存命中 / 输入">
+                  {usage.summary.prompt_tokens > 0
+                    ? `${((usage.summary.cache_tokens / usage.summary.prompt_tokens) * 100).toFixed(1)}%`
+                    : '—'}
                 </span>
               ) : (
                 <Skeleton className="h-5 w-16" />
@@ -269,9 +281,21 @@ export default function KeyPortalPage() {
                           {record.status === 'success' ? (
                             <Badge variant="secondary">成功</Badge>
                           ) : (
-                            <Badge variant="destructive" title={record.error || '请求失败'}>
-                              失败
-                            </Badge>
+                            // 失败原因直接可见（后端已脱敏，不含上游原话）；
+                            // 超宽省略号截断，悬停看全文。
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="destructive" className="shrink-0">
+                                失败
+                              </Badge>
+                              {record.error && (
+                                <span
+                                  className="max-w-44 truncate text-xs text-muted-foreground"
+                                  title={record.error}
+                                >
+                                  {record.error}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
