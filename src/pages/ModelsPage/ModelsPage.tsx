@@ -446,7 +446,9 @@ function ModelRouteDialog({
               onChange={(e) => setMultiplierText(e.target.value)}
               className="rounded-lg text-sm tabular-nums"
             />
-            <p className="text-xs text-muted-foreground">1.0 = 原价，按 token 消耗乘以该倍率计费</p>
+            <p className="text-xs text-muted-foreground">
+              1.00 = 原价，精度 0.01，按 token 消耗乘以该倍率计费
+            </p>
           </div>
         </div>
         <DialogFooter>

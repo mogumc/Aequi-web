@@ -16,9 +16,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { MultiplierInput } from '@/components/multiplier-input';
 import { VirtualList } from '@/components/virtual-list';
 import type { IBlockModel } from '@/data/admin';
-import { MULTIPLIER_SCALE, formatMultiplier, parseMultiplier } from '@/lib/multiplier';
+import { MULTIPLIER_SCALE, formatMultiplier } from '@/lib/multiplier';
 
 /** 列表单行高度。 */
 const AVAILABLE_ROW_HEIGHT = 36;
@@ -264,17 +265,14 @@ export function ModelEditor({
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor={`multiplier-${model.name}`}>计费倍率</Label>
-                        <Input
+                        <MultiplierInput
                           id={`multiplier-${model.name}`}
-                          value={formatMultiplier(model.multiplier_bp)}
-                          onChange={(e) => {
-                            const bp = parseMultiplier(e.target.value);
-                            if (bp !== null) patch(model.name, { multiplier_bp: bp });
-                          }}
+                          bp={model.multiplier_bp}
                           className="h-8 rounded-lg text-xs tabular-nums"
+                          onCommit={(bp) => patch(model.name, { multiplier_bp: bp })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          1.0 = 原价；只影响这个块里的这个模型
+                          1.00 = 原价，精度 0.01；只影响这个块里的这个模型
                         </p>
                       </div>
                     </PopoverContent>
