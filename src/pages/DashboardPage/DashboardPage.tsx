@@ -95,7 +95,8 @@ export default function DashboardPage() {
       todayErrorRate: todayLogs.length
         ? ((todayErrors / todayLogs.length) * 100).toFixed(1)
         : '0.0',
-      lowCredit: keys.filter((k) => k.enabled && Number(k.credits) < 5).length,
+      // 无限额度的密钥不参与余额判定，与下方 alerts 的口径保持一致。
+      lowCredit: keys.filter((k) => k.enabled && !k.unlimited && Number(k.credits) < 5).length,
     };
   }, [keys, logs]);
 

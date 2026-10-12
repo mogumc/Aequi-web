@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table';
 import type { IKeySelf, IKeyUsage } from '@/data/admin';
 import { api, clearAccessKey, getAccessKey, isUnauthorized } from '@/lib/api';
-import { formatCredits, formatDateTime } from '@/lib/format';
+import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
 
 /**
  * 密钥自助视图。
@@ -109,25 +109,34 @@ export default function KeyPortalPage() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* 大数从 K 起缩写，防止撑爆卡片；title 里保留精确值 */}
           <StatCard
             title="剩余额度"
-            value={self ? (self.unlimited ? '无限' : formatCredits(self.credits)) : null}
+            value={self ? (self.unlimited ? '无限' : formatCompact(self.credits)) : null}
             hint={self?.unlimited ? '消耗仍然照记' : '积分'}
+            exact={self && !self.unlimited ? formatCredits(self.credits) : undefined}
           />
           <StatCard
             title="请求次数"
-            value={usage ? String(usage.summary.requests) : null}
+            value={usage ? formatCompact(usage.summary.requests) : null}
             hint={usage && usage.summary.failed > 0 ? `失败 ${usage.summary.failed}` : undefined}
+            exact={usage ? String(usage.summary.requests) : undefined}
           />
           <StatCard
             title="消耗 token"
-            value={usage ? String(usage.summary.final_tokens) : null}
-            hint={usage ? `原始 ${usage.summary.raw_tokens}` : undefined}
+            value={usage ? formatCompact(usage.summary.final_tokens) : null}
+            hint={usage ? `原始 ${formatCompact(usage.summary.raw_tokens)}` : undefined}
+            exact={
+              usage
+                ? `${usage.summary.final_tokens}（原始 ${usage.summary.raw_tokens}）`
+                : undefined
+            }
           />
           <StatCard
             title="累计消耗"
-            value={usage ? formatCredits(usage.summary.credits) : null}
+            value={usage ? formatCompact(usage.summary.credits) : null}
             hint="积分"
+            exact={usage ? formatCredits(usage.summary.credits) : undefined}
           />
         </div>
 
@@ -233,10 +242,13 @@ function StatCard({
   title,
   value,
   hint,
+  exact,
 }: {
   title: string;
   value: string | null;
   hint?: string;
+  /** 悬停时展示的精确值（缩写只影响显示，不丢精度） */
+  exact?: string;
 }) {
   return (
     <Card>
@@ -247,7 +259,9 @@ function StatCard({
         {value === null ? (
           <Skeleton className="h-8 w-24" />
         ) : (
-          <p className="text-2xl font-medium tracking-tight">{value}</p>
+          <p className="text-2xl font-medium tracking-tight" title={exact}>
+            {value}
+          </p>
         )}
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       </CardContent>

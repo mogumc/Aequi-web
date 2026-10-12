@@ -613,16 +613,21 @@ export default function UpstreamBlocksPage() {
         </CardContent>
       </Card>
 
-      {/* 新建 / 编辑上游 */}
+      {/* 新建 / 编辑上游。
+          模型多时内容区滚动、底部按钮常驻；点击外部不关闭——
+          在长列表里拖滚动条时误触遮罩会直接丢掉未保存的编辑。 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent
+          className="flex max-h-[88vh] flex-col gap-0 rounded-2xl sm:max-w-3xl"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="shrink-0 pb-2">
             <DialogTitle>{editing ? '编辑上游块' : '新建上游块'}</DialogTitle>
             <DialogDescription>
               {editing ? `Block ID ${editing.id} 不可修改` : 'Block ID 创建后不可修改'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="block-id">Block ID</Label>
@@ -709,7 +714,7 @@ export default function UpstreamBlocksPage() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t pt-3">
             <Button variant="ghost" className="rounded-full" onClick={() => setDialogOpen(false)}>
               取消
             </Button>
