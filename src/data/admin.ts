@@ -150,6 +150,14 @@ export interface IKeyUsage {
   retention_days?: number;
 }
 
+/** 密钥侧可用模型路由（脱敏视图：无转发名与上游细节）。 */
+export interface IKeyModel {
+  block_id: string;
+  model: string;
+  /** 计费倍率，两位小数字符串。 */
+  multiplier: string;
+}
+
 // ---- 上游块 ----
 
 export interface IBlockModel {

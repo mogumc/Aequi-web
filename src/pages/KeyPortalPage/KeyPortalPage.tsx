@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { KeyRound, LogOut, RefreshCw } from 'lucide-react';
+import { KeyRound, LogOut, RefreshCw, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
+import { VirtualList } from '@/components/virtual-list';
 import {
   Table,
   TableBody,
@@ -22,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { IKeySelf, IKeyUsage } from '@/data/admin';
+import type { IKeyModel, IKeySelf, IKeyUsage } from '@/data/admin';
 import { api, clearAccessKey, getAccessKey, isUnauthorized } from '@/lib/api';
 import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
 
@@ -30,12 +32,14 @@ import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
  * 密钥自助视图。
  *
  * 用访问密钥登录后进入这里：只看得到这把密钥自己的余额与用量，
- * 没有任何管理能力（后端的 `/api/key/*` 只有两个只读接口）。
+ * 没有任何管理能力（后端的 `/api/key/*` 只有三个只读接口）。
  */
 export default function KeyPortalPage() {
   const navigate = useNavigate();
   const [self, setSelf] = useState<IKeySelf | null>(null);
   const [usage, setUsage] = useState<IKeyUsage | null>(null);
+  const [models, setModels] = useState<IKeyModel[] | null>(null);
+  const [modelQuery, setModelQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
@@ -43,9 +47,14 @@ export default function KeyPortalPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [me, records] = await Promise.all([api.keyMe(), api.keyUsage(50)]);
+      const [me, records, keyModels] = await Promise.all([
+        api.keyMe(),
+        api.keyUsage(50),
+        api.keyModels(),
+      ]);
       setSelf(me);
       setUsage(records);
+      setModels(keyModels.models);
       setError('');
     } catch (err) {
       if (isUnauthorized(err)) {
@@ -59,6 +68,16 @@ export default function KeyPortalPage() {
       setLoading(false);
     }
   }, [navigate]);
+
+  /** 按模型名或块 id 过滤可用模型路由。 */
+  const filteredModels = useMemo(() => {
+    if (!models) return [];
+    const needle = modelQuery.trim().toLowerCase();
+    if (!needle) return models;
+    return models.filter(
+      (m) => m.model.toLowerCase().includes(needle) || m.block_id.toLowerCase().includes(needle),
+    );
+  }, [models, modelQuery]);
 
   /** 游标分页：把更早的一页追加到现有记录后面。 */
   const loadMore = useCallback(async () => {
@@ -263,6 +282,79 @@ export default function KeyPortalPage() {
                 <Skeleton className="h-5 w-16" />
               )}
             </Field>
+          </CardContent>
+        </Card>
+
+        {/* 可用模型：这把密钥实际能调的「块/模型」路由与计费倍率（脱敏视图） */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">可用模型</CardTitle>
+            <CardDescription>
+              只写模型名在提供它的块之间轮询；用「块/模型」写法可锁定某个块。
+              倍率决定该模型按多少倍计费。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="relative max-w-xs">
+              <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={modelQuery}
+                onChange={(e) => setModelQuery(e.target.value)}
+                placeholder="搜索模型名或块"
+                className="rounded-lg pl-9"
+              />
+            </div>
+
+            {models === null ? (
+              <div className="space-y-2">
+                {[0, 1, 2].map((row) => (
+                  <Skeleton key={row} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border/60 p-2">
+                <div className="flex items-center gap-2 border-b border-border/60 px-2.5 pb-1.5 text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1">
+                    {filteredModels.length} 个模型路由
+                  </span>
+                  <span className="w-56 shrink-0">调用写法</span>
+                  <span className="w-16 shrink-0 text-right">倍率</span>
+                </div>
+                <VirtualList
+                  items={filteredModels}
+                  itemHeight={44}
+                  maxHeight={280}
+                  resetKey={modelQuery}
+                  getItemKey={(m) => `${m.block_id}/${m.model}`}
+                  empty={
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      {models.length === 0
+                        ? '没有可用模型——白名单与启用的块不匹配，或块里还没有配置模型'
+                        : '没有匹配的模型'}
+                    </p>
+                  }
+                  renderItem={(m) => (
+                    <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-border/60 px-2.5">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {m.model}
+                      </span>
+                      <code
+                        className="w-56 shrink-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
+                        title={`${m.block_id}/${m.model}`}
+                      >
+                        {m.block_id}/{m.model}
+                      </code>
+                      <Badge
+                        variant="outline"
+                        className="w-16 shrink-0 justify-center font-mono text-[11px] tabular-nums"
+                      >
+                        {m.multiplier}×
+                      </Badge>
+                    </div>
+                  )}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
