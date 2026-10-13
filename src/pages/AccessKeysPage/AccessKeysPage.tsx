@@ -911,8 +911,13 @@ function KeyUsageDialog({
                         {formatDateTime(record.created_at)}
                       </TableCell>
                       <TableCell>
+                        {/* 上游块跟在模型下面一行：列表列数已够多，
+                            不再单开一列（这份数据与门户同源）。 */}
                         <span className="block max-w-[180px] truncate font-mono text-xs">
                           {record.model}
+                        </span>
+                        <span className="block max-w-[180px] truncate text-xs text-muted-foreground">
+                          {record.block_id ?? '上游块 —'}
                         </span>
                       </TableCell>
                       <TableCell className="tabular-nums">
