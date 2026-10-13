@@ -462,8 +462,8 @@ export default function KeyPortalPage() {
           <CardHeader>
             <CardTitle className="text-base">用量记录</CardTitle>
             <CardDescription>
-              最近 50 次请求一页；点击任意一行展开完整明细。失败请求同样在列，
-              token 与积分为 0。
+              最近 50 次请求一页；点击任意一行展开完整明细（含这次实际命中的上游块）。
+              失败请求同样在列，token 与积分为 0。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -575,6 +575,14 @@ function UsageDetail({ record }: { record: IUsageRecord }) {
   return (
     <div className="space-y-3 px-1 py-1 text-sm">
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="上游块">
+          {/* 只写模型名的请求是在多个块之间轮询的，这里记的是实际落点 */}
+          {record.block_id ? (
+            <span className="font-mono text-xs">{record.block_id}</span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </Field>
         <Field label="输入 token">
           <span className="tabular-nums">{n(record.prompt_tokens)}</span>
         </Field>

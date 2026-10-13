@@ -127,6 +127,13 @@ export interface IUsageSummary {
 export interface IUsageRecord {
   id: number;
   model: string;
+  /**
+   * 这次实际命中的上游块（路由快照）。
+   *
+   * 只写模型名的请求会在提供它的块之间轮询，落点只有执行时才知道。
+   * `null` 有两种情形：老记录，或「选中块之前」就失败的请求。
+   */
+  block_id: string | null;
   status: string;
   prompt_tokens: number;
   completion_tokens: number;

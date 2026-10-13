@@ -18,13 +18,24 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { IAccessKey } from '@/data/admin';
 import { api, isUnauthorized } from '@/lib/api';
 
-/** 一次拉全部访问密钥：后端单页上限 100，循环取完为止。 */
+/** 单页上限（后端 `MAX_PAGE_SIZE`）。 */
+const KEY_PAGE_SIZE = 100;
+/**
+ * 最多翻多少页——**有界**是硬要求。
+ *
+ * 退出条件依赖后端 `total` 与返回条数自洽；一旦 `total` 报大或分页异常重复
+ * 返回同一页，没有这个上限就是前端死循环 + 请求风暴。下游密钥量远小于 2000，
+ * 正常永远翻不到这里。
+ */
+const KEY_PAGE_MAX = 20;
+
+/** 一次拉全部访问密钥：按页取到 `total` 为止，最多 `KEY_PAGE_MAX` 页。 */
 async function fetchAllKeys(): Promise<IAccessKey[]> {
   const all: IAccessKey[] = [];
-  for (let page = 1; ; page += 1) {
-    const res = await api.listKeys({ page, page_size: 100 });
+  for (let page = 1; page <= KEY_PAGE_MAX; page += 1) {
+    const res = await api.listKeys({ page, page_size: KEY_PAGE_SIZE });
     all.push(...res.keys);
-    // total 是筛选后的总数；拿满或拿到空页就收工。
+    // 拿满或拿到空页就收工。
     if (res.keys.length === 0 || all.length >= res.total) break;
   }
   return all;
