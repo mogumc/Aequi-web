@@ -356,6 +356,7 @@ export default function RequestLogsPage() {
                   <DetailRow label="来源 IP" value={detail.ip || '-'} />
                   <DetailRow label="User-Agent" value={detail.user_agent || '-'} />
                   <DetailRow label="耗时" value={formatDuration(detail.duration_ms)} />
+                  <DetailRow label="请求类型" value={detail.stream ? '流式' : '普通'} />
                   <DetailRow label="Prompt Tokens" value={String(detail.prompt_tokens)} />
                   <DetailRow label="Completion Tokens" value={String(detail.completion_tokens)} />
                   <DetailRow label="Cache Tokens" value={String(detail.cache_tokens)} />

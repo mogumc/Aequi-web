@@ -7,6 +7,7 @@ import type {
   IDeviceInfo,
   IHealth,
   IKeyListResponse,
+  IKeyModel,
   IKeySelf,
   IKeyUsage,
   ILoginResponse,
@@ -182,6 +183,8 @@ export const api = {
       undefined,
       'portal',
     ),
+  keyModels: () =>
+    request<{ models: IKeyModel[] }>('/api/key/models', undefined, 'portal'),
 
   // ---- 认证与会话 ----
   login: (body: { username: string; password: string; otp?: string }) =>
