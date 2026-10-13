@@ -215,16 +215,17 @@ export default function KeyPortalPage() {
           />
           <StatCard
             title="消耗 token"
-            value={usage ? formatCompact(usage.summary.final_tokens) : null}
-            // 「原始」按语义展示完整数值：超宽时省略号截断，悬停看全。
+            // 这里要的是**上游实际报出来的** token 数。乘过倍率的那个是计费口径的
+            // 折算值（`final_tokens`），把它当「消耗」显示等于把价格当用量。
+            value={usage ? formatCompact(usage.summary.raw_tokens) : null}
             hint={
               usage
-                ? `原始 ${usage.summary.raw_tokens.toLocaleString('zh-CN')}`
+                ? `折算 ${usage.summary.final_tokens.toLocaleString('zh-CN')}`
                 : undefined
             }
             exact={
               usage
-                ? `${usage.summary.final_tokens}（原始 ${usage.summary.raw_tokens}）`
+                ? `${usage.summary.raw_tokens}（折算 ${usage.summary.final_tokens}）`
                 : undefined
             }
           />
@@ -605,7 +606,8 @@ function UsageDetail({ record }: { record: IUsageRecord }) {
         <Field label="原始 token">
           <span className="tabular-nums">{n(record.raw_tokens)}</span>
         </Field>
-        <Field label="最终 token">
+        <Field label="折算 token">
+          {/* 原始 token × 倍率，也就是计费的基数——它不是「实际消耗了多少」 */}
           <span className="tabular-nums">{n(record.final_tokens)}</span>
         </Field>
         <Field label="计费积分">
