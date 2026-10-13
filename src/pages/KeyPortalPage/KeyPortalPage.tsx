@@ -49,6 +49,8 @@ export default function KeyPortalPage() {
   const [expandedUsage, setExpandedUsage] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** 「用量记录」这一块自己的刷新态，与整页的 `loading` 分开。 */
+  const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -154,6 +156,37 @@ export default function KeyPortalPage() {
     load();
   }, [load]);
 
+  /**
+   * 只刷新用量这一块：记录、汇总，连同余额。
+   *
+   * 不复用 `load()`：那会把可用模型也重取一遍，顺手清掉模型搜索与展开态——
+   * 点刷新的人多半只是想看看刚才那几次请求记上没有。
+   *
+   * 余额跟着一起刷是刻意的：用量与余额是同一次刷新的两面，只刷一半会让页面上
+   * 同时挂着两个时间点的数字（记录里有新请求、额度还是旧的）。
+   * 刷新等于回到最新一页，所以「更早记录」攒出来的分页与展开态在这里归零。
+   */
+  const refreshUsage = useCallback(async () => {
+    if (refreshingUsage) return;
+    setRefreshingUsage(true);
+    try {
+      const [records, me] = await Promise.all([api.keyUsage(50), api.keyMe()]);
+      setUsage(records);
+      setSelf(me);
+      setExpandedUsage(new Set());
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearAccessKey();
+        toast.error('密钥已失效，请重新登录');
+        navigate('/login', { replace: true });
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : '刷新失败，请稍后重试');
+    } finally {
+      setRefreshingUsage(false);
+    }
+  }, [refreshingUsage, navigate]);
+
   const logout = () => {
     clearAccessKey();
     navigate('/login', { replace: true });
@@ -215,16 +248,17 @@ export default function KeyPortalPage() {
           />
           <StatCard
             title="消耗 token"
-            value={usage ? formatCompact(usage.summary.final_tokens) : null}
-            // 「原始」按语义展示完整数值：超宽时省略号截断，悬停看全。
+            // 这里要的是**上游实际报出来的** token 数。乘过倍率的那个是计费口径的
+            // 折算值（`final_tokens`），把它当「消耗」显示等于把价格当用量。
+            value={usage ? formatCompact(usage.summary.raw_tokens) : null}
             hint={
               usage
-                ? `原始 ${usage.summary.raw_tokens.toLocaleString('zh-CN')}`
+                ? `折算 ${usage.summary.final_tokens.toLocaleString('zh-CN')}`
                 : undefined
             }
             exact={
               usage
-                ? `${usage.summary.final_tokens}（原始 ${usage.summary.raw_tokens}）`
+                ? `${usage.summary.raw_tokens}（折算 ${usage.summary.final_tokens}）`
                 : undefined
             }
           />
@@ -459,12 +493,25 @@ export default function KeyPortalPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">用量记录</CardTitle>
-            <CardDescription>
-              最近 50 次请求一页；点击任意一行展开完整明细（含这次实际命中的上游块）。
-              失败请求同样在列，token 与积分为 0。
-            </CardDescription>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="text-base">用量记录</CardTitle>
+              <CardDescription>
+                最近 50 次请求一页；点击任意一行展开完整明细（含这次实际命中的上游块）。
+                失败请求同样在列，token 与积分为 0。
+              </CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 rounded-full"
+              onClick={() => void refreshUsage()}
+              disabled={refreshingUsage}
+              aria-label="刷新用量记录"
+              title="刷新用量记录"
+            >
+              <RefreshCw className={refreshingUsage ? 'size-4 animate-spin' : 'size-4'} />
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {loading && !usage ? (
@@ -543,7 +590,11 @@ export default function KeyPortalPage() {
                 </Table>
               </div>
             ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">还没有用量记录</p>
+              // 区分「确实没有记录」与「没取到」：后者右上角有刷新可以重试，
+              // 说成「还没有用量记录」会让人以为账目是空的。
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {usage ? '还没有用量记录' : '用量记录没加载出来，点右上角刷新重试'}
+              </p>
             )}
 
             {usage?.has_more && (
@@ -605,7 +656,8 @@ function UsageDetail({ record }: { record: IUsageRecord }) {
         <Field label="原始 token">
           <span className="tabular-nums">{n(record.raw_tokens)}</span>
         </Field>
-        <Field label="最终 token">
+        <Field label="折算 token">
+          {/* 原始 token × 倍率，也就是计费的基数——它不是「实际消耗了多少」 */}
           <span className="tabular-nums">{n(record.final_tokens)}</span>
         </Field>
         <Field label="计费积分">

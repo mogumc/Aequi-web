@@ -873,8 +873,10 @@ function KeyUsageDialog({
                 />
                 <UsageStat
                   label="消耗 token"
-                  value={formatCompact(usage.summary.final_tokens)}
-                  hint={`原始 ${usage.summary.raw_tokens.toLocaleString('zh-CN')}`}
+                  // 与门户同一口径：显示上游实际报出来的 token；乘过倍率的那个
+                  // 是计费折算值，当「消耗」显示等于把价格当用量。
+                  value={formatCompact(usage.summary.raw_tokens)}
+                  hint={`折算 ${usage.summary.final_tokens.toLocaleString('zh-CN')}`}
                 />
                 <UsageStat label="累计消耗" value={formatCompact(usage.summary.credits)} hint="积分" />
                 <UsageStat

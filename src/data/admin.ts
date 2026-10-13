@@ -1,4 +1,4 @@
-// EXPORTS: IHealth, ILoginResponse, IProvider, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IKeyListResponse, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IKeySelf, IUsageSummary, IUsageRecord, IKeyUsage, IRequestLog
+// EXPORTS: IHealth, ILoginResponse, IProvider, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IKeyListResponse, IBlockHeader, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IKeySelf, IUsageSummary, IUsageRecord, IKeyUsage, IRequestLog
 
 // ---- 公开接口 ----
 
@@ -174,6 +174,18 @@ export interface IBlockModel {
   multiplier_bp?: number;
 }
 
+/**
+ * 块的自定义请求头：每次发往该上游的请求都会带上。
+ *
+ * 有些上游（自建网关、中转站、企业版接口）要额外的头才肯干活：版本头、
+ * 租户/组织头、网关自己的路由头，或者认证压根不是标准那三种写法。
+ * 明文存取——与上游密钥同一套取舍，管理员要能取回来核对。
+ */
+export interface IBlockHeader {
+  name: string;
+  value: string;
+}
+
 export interface IBlockInput {
   id?: string;
   name: string;
@@ -182,6 +194,8 @@ export interface IBlockInput {
   base_url: string;
   proxy: string | null;
   models: IBlockModel[];
+  /** 整份提交：传空数组就是清空（后端不做按名字的增量合并）。 */
+  headers: IBlockHeader[];
 }
 
 export interface IUpstreamBlock {
@@ -192,6 +206,8 @@ export interface IUpstreamBlock {
   base_url: string;
   proxy: string | null;
   models: IBlockModel[];
+  /** 自定义请求头，空数组表示不加。 */
+  headers: IBlockHeader[];
   /** 停用的块不参与调度。 */
   enabled: boolean;
   key_count?: number;

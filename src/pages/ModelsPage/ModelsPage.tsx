@@ -66,7 +66,7 @@ export default function ModelsPage() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [editTarget, setEditTarget] = useState<IEditTarget | null>(null);
-  /** 「快速应用」的目标：把这条路由增量写进若干密钥的白名单。 */
+  /** 「快速应用」的目标：把这条路由在若干密钥的白名单里增删。 */
   const [applyTarget, setApplyTarget] = useState<IEditTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -209,7 +209,7 @@ export default function ModelsPage() {
               同名模型合并展示，展开查看它在各块里的路由（调用写法、转发名、倍率），
               点击「修改」可直接调整某条路由——请求时用「块/模型」写法锁定某个块，
               只写模型名则在提供它的块之间轮询。在「修改」里点「快速应用」，
-              还能把这条路由一次性补进多把访问密钥的白名单。
+              还能把这条路由一次性地加进、或从多把访问密钥的白名单里移除。
             </p>
           </div>
           <Button
@@ -383,7 +383,7 @@ export default function ModelsPage() {
         />
       )}
 
-      {/* 快速应用：把这条「块/模型」路由增量写进密钥白名单 */}
+      {/* 快速应用：把这条「块/模型」路由在密钥白名单里增删 */}
       {applyTarget && (
         <ModelApplyKeysDialog
           key={`${applyTarget.blockId}/${applyTarget.modelName}`}
@@ -412,7 +412,7 @@ function ModelRouteDialog({
   open: boolean;
   saving: boolean;
   onOpenChange: (v: boolean) => void;
-  /** 打开「快速应用」：把这条路由补进若干密钥的白名单。 */
+  /** 打开「快速应用」：把这条路由在若干密钥的白名单里增删。 */
   onQuickApply: () => void;
   onSave: (forward: string, multiplierText: string, onDone: () => void) => void;
 }) {

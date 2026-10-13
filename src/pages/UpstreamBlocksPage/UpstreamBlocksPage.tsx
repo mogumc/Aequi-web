@@ -66,7 +66,9 @@ import {
 } from '@/data/admin';
 import { ApiError, api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { cleanHeaders, findHeaderProblem, type IHeaderRow } from '@/lib/headers';
 import { ModelEditor } from '@/components/model-editor';
+import { HeaderEditor } from '@/components/header-editor';
 
 const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
 
@@ -443,6 +445,8 @@ export default function UpstreamBlocksPage() {
   const [formWeight, setFormWeight] = useState('1');
   const [formBaseUrl, setFormBaseUrl] = useState('');
   const [formProxy, setFormProxy] = useState('');
+  // 编辑期允许半成品行（只有名字、或整行空白），提交前统一 clean。
+  const [formHeaders, setFormHeaders] = useState<IHeaderRow[]>([]);
   const [formModelList, setFormModelList] = useState<IBlockModel[]>([]);
   // 从上游拉回来的可用模型（拉取结果与错误分开存，便于分别展示）。
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -484,6 +488,7 @@ export default function UpstreamBlocksPage() {
     setFormWeight('1');
     setFormBaseUrl('');
     setFormProxy('');
+    setFormHeaders([]);
     setFormModelList([]);
     setFetchedModels([]);
     setFetchError(null);
@@ -498,6 +503,7 @@ export default function UpstreamBlocksPage() {
     setFormWeight(String(b.weight));
     setFormBaseUrl(b.base_url);
     setFormProxy(b.proxy ?? '');
+    setFormHeaders(b.headers ?? []);
     setFormModelList(b.models);
     setFetchedModels([]);
     setFetchError(null);
@@ -539,6 +545,13 @@ export default function UpstreamBlocksPage() {
       toast.error('权重必须是正数');
       return;
     }
+    // 自定义头先在本地挡一道（与后端同一套规则），省一趟注定 400 的往返。
+    // 空白行在这里丢掉——「加了一行还没填」不该阻止保存。
+    const headerProblem = findHeaderProblem(formHeaders);
+    if (headerProblem) {
+      toast.error(headerProblem);
+      return;
+    }
     const body: IBlockInput = {
       name: formName.trim(),
       api_format: formFormat as IBlockInput['api_format'],
@@ -546,6 +559,7 @@ export default function UpstreamBlocksPage() {
       base_url: formBaseUrl.trim(),
       proxy: formProxy.trim() || null,
       models: formModelList,
+      headers: cleanHeaders(formHeaders),
     };
     setSaving(true);
     try {
@@ -653,6 +667,16 @@ export default function UpstreamBlocksPage() {
                         {b.proxy && (
                           <span className="block max-w-[220px] truncate text-xs text-muted-foreground">
                             代理：{b.proxy}
+                          </span>
+                        )}
+                        {/* 只列头名不列值：值可能是凭证（比如整条 Authorization），
+                            摊在列表里就是明晃晃地摆在屏幕上。 */}
+                        {(b.headers ?? []).length > 0 && (
+                          <span
+                            className="block max-w-[220px] truncate text-xs text-muted-foreground"
+                            title={b.headers.map((h) => h.name).join('、')}
+                          >
+                            请求头：{b.headers.map((h) => h.name).join('、')}
                           </span>
                         )}
                       </TableCell>
@@ -794,6 +818,10 @@ export default function UpstreamBlocksPage() {
                 placeholder="http://127.0.0.1:7890"
                 className="rounded-lg"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>自定义请求头</Label>
+              <HeaderEditor headers={formHeaders} onChange={setFormHeaders} />
             </div>
             <div className="space-y-2">
               <Label>模型</Label>
