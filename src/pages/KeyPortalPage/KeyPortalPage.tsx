@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { KeyRound, LogOut, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, KeyRound, LogOut, RefreshCw, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
-import { VirtualList } from '@/components/virtual-list';
 import {
   Table,
   TableBody,
@@ -24,9 +23,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { IKeyModel, IKeySelf, IKeyUsage } from '@/data/admin';
+import type { IKeyModel, IKeySelf, IKeyUsage, IUsageRecord } from '@/data/admin';
 import { api, clearAccessKey, getAccessKey, isUnauthorized } from '@/lib/api';
 import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
+
+/** 同名模型合并成一组（模型名是主键），展开看它在各块里的路由。 */
+interface IModelRouteGroup {
+  name: string;
+  routes: IKeyModel[];
+}
 
 /**
  * 密钥自助视图。
@@ -40,6 +45,8 @@ export default function KeyPortalPage() {
   const [usage, setUsage] = useState<IKeyUsage | null>(null);
   const [models, setModels] = useState<IKeyModel[] | null>(null);
   const [modelQuery, setModelQuery] = useState('');
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const [expandedUsage, setExpandedUsage] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
@@ -69,15 +76,53 @@ export default function KeyPortalPage() {
     }
   }, [navigate]);
 
-  /** 按模型名或块 id 过滤可用模型路由。 */
-  const filteredModels = useMemo(() => {
-    if (!models) return [];
+  /**
+   * 按模型名合并路由，组内按块 id 排序。
+   * 模型名是主键——一个模型可以出现在多个块里（各自带不同倍率）。
+   */
+  const modelGroups = useMemo<IModelRouteGroup[]>(() => {
+    const map = new Map<string, IKeyModel[]>();
+    for (const m of models ?? []) {
+      const bucket = map.get(m.model);
+      if (bucket) bucket.push(m);
+      else map.set(m.model, [m]);
+    }
+    return [...map.entries()]
+      .map(([name, routes]) => ({
+        name,
+        routes: [...routes].sort((a, b) => a.block_id.localeCompare(b.block_id)),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [models]);
+
+  /** 搜索命中模型名或组内任一所属块即保留该组。 */
+  const filteredModelGroups = useMemo<IModelRouteGroup[]>(() => {
     const needle = modelQuery.trim().toLowerCase();
-    if (!needle) return models;
-    return models.filter(
-      (m) => m.model.toLowerCase().includes(needle) || m.block_id.toLowerCase().includes(needle),
+    if (!needle) return modelGroups;
+    return modelGroups.filter(
+      ({ name, routes }) =>
+        name.toLowerCase().includes(needle) ||
+        routes.some((r) => r.block_id.toLowerCase().includes(needle)),
     );
-  }, [models, modelQuery]);
+  }, [modelGroups, modelQuery]);
+
+  const toggleModel = (name: string) => {
+    setExpandedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleUsage = (id: number) => {
+    setExpandedUsage((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   /** 游标分页：把更早的一页追加到现有记录后面。 */
   const loadMore = useCallback(async () => {
@@ -191,11 +236,12 @@ export default function KeyPortalPage() {
           />
         </div>
 
+        {/* 密钥信息：可用模型有专门一栏，这里不再重复（否则又长又难分辨） */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">密钥信息</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
             <Field label="状态">
               {self ? (
                 <Badge variant={self.enabled ? 'default' : 'secondary'}>
@@ -204,13 +250,6 @@ export default function KeyPortalPage() {
               ) : (
                 <Skeleton className="h-5 w-12" />
               )}
-            </Field>
-            <Field label="可用模型">
-              {self
-                ? self.allowed_models && self.allowed_models.length > 0
-                  ? self.allowed_models.join('、')
-                  : '不限制'
-                : '—'}
             </Field>
             <Field label="创建时间">
               {self ? formatDateTime(self.created_at) : '—'}
@@ -285,7 +324,7 @@ export default function KeyPortalPage() {
           </CardContent>
         </Card>
 
-        {/* 可用模型：这把密钥实际能调的「块/模型」路由与计费倍率（脱敏视图） */}
+        {/* 可用模型：按模型名（主键）合并，展开看各块的路由与倍率（脱敏视图） */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">可用模型</CardTitle>
@@ -294,7 +333,22 @@ export default function KeyPortalPage() {
               倍率决定该模型按多少倍计费。
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            {models !== null && (
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <span>
+                  共 <strong className="tabular-nums">{modelGroups.length}</strong> 个模型
+                </span>
+                <span className="text-muted-foreground">
+                  <strong className="tabular-nums">{models.length}</strong> 条路由，分布在{' '}
+                  <strong className="tabular-nums">
+                    {new Set(models.map((m) => m.block_id)).size}
+                  </strong>{' '}
+                  个块里
+                </span>
+              </div>
+            )}
+
             <div className="relative max-w-xs">
               <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -305,56 +359,102 @@ export default function KeyPortalPage() {
               />
             </div>
 
-            {models === null ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((row) => (
-                  <Skeleton key={row} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-border/60 p-2">
-                <div className="flex items-center gap-2 border-b border-border/60 px-2.5 pb-1.5 text-xs text-muted-foreground">
-                  <span className="min-w-0 flex-1">
-                    {filteredModels.length} 个模型路由
-                  </span>
-                  <span className="w-56 shrink-0">调用写法</span>
-                  <span className="w-16 shrink-0 text-right">倍率</span>
-                </div>
-                <VirtualList
-                  items={filteredModels}
-                  itemHeight={44}
-                  maxHeight={280}
-                  resetKey={modelQuery}
-                  getItemKey={(m) => `${m.block_id}/${m.model}`}
-                  empty={
-                    <p className="py-6 text-center text-sm text-muted-foreground">
-                      {models.length === 0
-                        ? '没有可用模型——白名单与启用的块不匹配，或块里还没有配置模型'
-                        : '没有匹配的模型'}
-                    </p>
-                  }
-                  renderItem={(m) => (
-                    <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-border/60 px-2.5">
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {m.model}
-                      </span>
-                      <code
-                        className="w-56 shrink-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
-                        title={`${m.block_id}/${m.model}`}
-                      >
-                        {m.block_id}/{m.model}
-                      </code>
-                      <Badge
-                        variant="outline"
-                        className="w-16 shrink-0 justify-center font-mono text-[11px] tabular-nums"
-                      >
-                        {m.multiplier}×
-                      </Badge>
-                    </div>
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">模型</TableHead>
+                    <TableHead
+                      className="whitespace-nowrap"
+                      title="提供该模型的块数量"
+                    >
+                      上游数
+                    </TableHead>
+                    <TableHead className="w-10" aria-label="展开" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {models === null ? (
+                    [0, 1, 2].map((row) => (
+                      <TableRow key={row}>
+                        <TableCell colSpan={3}>
+                          <Skeleton className="h-8 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : filteredModelGroups.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                        {models.length === 0
+                          ? '没有可用模型——白名单与启用的块不匹配，或块里还没有配置模型'
+                          : '没有匹配的模型'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredModelGroups.map(({ name, routes }) => {
+                      const isOpen = expandedModels.has(name);
+                      return (
+                        <Fragment key={name}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => toggleModel(name)}
+                            aria-expanded={isOpen}
+                          >
+                            <TableCell className="font-medium">{name}</TableCell>
+                            <TableCell className="tabular-nums">{routes.length}</TableCell>
+                            <TableCell className="text-right">
+                              {isOpen ? (
+                                <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="ml-auto size-4 text-muted-foreground" />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          {isOpen && (
+                            <TableRow className="hover:bg-transparent">
+                              <TableCell colSpan={3} className="bg-muted/30 p-0">
+                                <div className="px-4 py-3">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="whitespace-nowrap text-xs">
+                                          调用写法
+                                        </TableHead>
+                                        <TableHead className="whitespace-nowrap text-xs text-right">
+                                          倍率
+                                        </TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {routes.map((route) => (
+                                        <TableRow key={`${route.block_id}/${name}`}>
+                                          <TableCell>
+                                            {/* 块 id 已包含在调用写法里（无块名可用），不再单列 */}
+                                            <code
+                                              className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
+                                              title="请求里用这个写法可以锁定该块"
+                                            >
+                                              {route.block_id}/{name}
+                                            </code>
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono text-xs tabular-nums">
+                                            {route.multiplier}×
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })
                   )}
-                />
-              </div>
-            )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -362,10 +462,11 @@ export default function KeyPortalPage() {
           <CardHeader>
             <CardTitle className="text-base">用量记录</CardTitle>
             <CardDescription>
-              最近 50 次请求一页；失败请求同样在列，token 与积分为 0。
+              最近 50 次请求一页；点击任意一行展开完整明细。失败请求同样在列，
+              token 与积分为 0。
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             {loading && !usage ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((row) => (
@@ -373,58 +474,71 @@ export default function KeyPortalPage() {
                 ))}
               </div>
             ) : usage && usage.records.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="w-full overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="whitespace-nowrap">时间</TableHead>
                       <TableHead className="whitespace-nowrap">模型</TableHead>
-                      <TableHead className="whitespace-nowrap">输入</TableHead>
-                      <TableHead className="whitespace-nowrap">输出</TableHead>
-                      <TableHead className="whitespace-nowrap">类型</TableHead>
-                      <TableHead className="whitespace-nowrap">倍率</TableHead>
+                      <TableHead className="whitespace-nowrap">输入 / 输出</TableHead>
                       <TableHead className="whitespace-nowrap">积分</TableHead>
                       <TableHead className="whitespace-nowrap">状态</TableHead>
+                      <TableHead className="w-10" aria-label="展开" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {usage.records.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {formatDateTime(record.created_at)}
-                        </TableCell>
-                        <TableCell>{record.model}</TableCell>
-                        <TableCell title={record.estimated ? '本地估算' : undefined}>
-                          {record.prompt_tokens}
-                          {record.estimated && '*'}
-                        </TableCell>
-                        <TableCell>{record.completion_tokens}</TableCell>
-                        <TableCell>{record.stream ? '流式' : '普通'}</TableCell>
-                        <TableCell>{record.multiplier}</TableCell>
-                        <TableCell>{formatCredits(record.credits)}</TableCell>
-                        <TableCell>
-                          {record.status === 'success' ? (
-                            <Badge variant="secondary">成功</Badge>
-                          ) : (
-                            // 失败原因直接可见（后端已脱敏，不含上游原话）；
-                            // 超宽省略号截断，悬停看全文。
-                            <div className="flex items-center gap-1.5">
-                              <Badge variant="destructive" className="shrink-0">
-                                失败
-                              </Badge>
-                              {record.error && (
-                                <span
-                                  className="max-w-44 truncate text-xs text-muted-foreground"
-                                  title={record.error}
-                                >
-                                  {record.error}
-                                </span>
+                    {usage.records.map((record) => {
+                      const isOpen = expandedUsage.has(record.id);
+                      return (
+                        <Fragment key={record.id}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => toggleUsage(record.id)}
+                            aria-expanded={isOpen}
+                          >
+                            <TableCell className="whitespace-nowrap">
+                              {formatDateTime(record.created_at)}
+                            </TableCell>
+                            <TableCell className="font-medium">{record.model}</TableCell>
+                            <TableCell
+                              className="whitespace-nowrap tabular-nums"
+                              title={record.estimated ? 'token 为本地估算' : undefined}
+                            >
+                              {formatCompact(record.prompt_tokens)}
+                              {record.estimated && '*'}
+                              <span className="mx-1 text-muted-foreground">/</span>
+                              {formatCompact(record.completion_tokens)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums">
+                              {formatCredits(record.credits)}
+                            </TableCell>
+                            <TableCell>
+                              {record.status === 'success' ? (
+                                <Badge variant="secondary">成功</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="shrink-0">
+                                  失败
+                                </Badge>
                               )}
-                            </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isOpen ? (
+                                <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="ml-auto size-4 text-muted-foreground" />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          {isOpen && (
+                            <TableRow className="hover:bg-transparent">
+                              <TableCell colSpan={6} className="bg-muted/30">
+                                <UsageDetail record={record} />
+                              </TableCell>
+                            </TableRow>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        </Fragment>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -433,7 +547,7 @@ export default function KeyPortalPage() {
             )}
 
             {usage?.has_more && (
-              <div className="mt-3 flex justify-center">
+              <div className="flex justify-center">
                 <Button
                   variant="outline"
                   size="sm"
@@ -441,10 +555,8 @@ export default function KeyPortalPage() {
                   disabled={loadingMore}
                   onClick={() => void loadMore()}
                 >
-                  {loadingMore ? (
-                    <RefreshCw className="size-4 animate-spin" />
-                  ) : null}
-                  {loadingMore ? '加载中…' : '查询更早日志'}
+                  {loadingMore ? <RefreshCw className="size-4 animate-spin" /> : null}
+                  {loadingMore ? '加载中…' : '显示更早记录'}
                 </Button>
               </div>
             )}
@@ -453,6 +565,65 @@ export default function KeyPortalPage() {
       </main>
 
       <Toaster position="top-center" richColors />
+    </div>
+  );
+}
+
+/** 单条用量记录的展开明细：主行只放概览，细节都在这里。 */
+function UsageDetail({ record }: { record: IUsageRecord }) {
+  const n = (v: number) => v.toLocaleString('zh-CN');
+  return (
+    <div className="space-y-3 px-1 py-1 text-sm">
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="输入 token">
+          <span className="tabular-nums">{n(record.prompt_tokens)}</span>
+        </Field>
+        <Field label="输出 token">
+          <span className="tabular-nums">{n(record.completion_tokens)}</span>
+        </Field>
+        <Field label="缓存命中">
+          <span className="tabular-nums">
+            {n(record.cache_tokens)}
+            {record.prompt_tokens > 0 && (
+              <span className="ml-1 text-xs text-muted-foreground">
+                ({((record.cache_tokens / record.prompt_tokens) * 100).toFixed(1)}%)
+              </span>
+            )}
+          </span>
+        </Field>
+        <Field label="倍率">
+          <span className="font-mono tabular-nums">{record.multiplier}×</span>
+        </Field>
+        <Field label="原始 token">
+          <span className="tabular-nums">{n(record.raw_tokens)}</span>
+        </Field>
+        <Field label="最终 token">
+          <span className="tabular-nums">{n(record.final_tokens)}</span>
+        </Field>
+        <Field label="计费积分">
+          <span className="tabular-nums">{formatCredits(record.credits)}</span>
+        </Field>
+        <Field label="类型">
+          {record.stream ? '流式' : '普通'}
+        </Field>
+        <Field label="token 来源">
+          {record.estimated ? '本地估算（标 *）' : '上游返回'}
+        </Field>
+        <Field label="时间">
+          <span className="tabular-nums">{formatDateTime(record.created_at)}</span>
+        </Field>
+        <Field label="记录 ID">
+          <span className="font-mono tabular-nums">{record.id}</span>
+        </Field>
+      </div>
+      {record.error && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">失败原因</p>
+          <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+            {record.error}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

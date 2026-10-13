@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Cpu, Pencil, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Cpu, Pencil, RefreshCw, Search, Zap } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ModelApplyKeysDialog } from '@/components/model-apply-keys';
 import type { IBlockModel, IUpstreamBlock } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatMultiplier, parseMultiplier } from '@/lib/multiplier';
@@ -65,6 +66,8 @@ export default function ModelsPage() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [editTarget, setEditTarget] = useState<IEditTarget | null>(null);
+  /** 「快速应用」的目标：把这条路由增量写进若干密钥的白名单。 */
+  const [applyTarget, setApplyTarget] = useState<IEditTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -205,7 +208,8 @@ export default function ModelsPage() {
             <p className="text-sm text-muted-foreground">
               同名模型合并展示，展开查看它在各块里的路由（调用写法、转发名、倍率），
               点击「修改」可直接调整某条路由——请求时用「块/模型」写法锁定某个块，
-              只写模型名则在提供它的块之间轮询。
+              只写模型名则在提供它的块之间轮询。在「修改」里点「快速应用」，
+              还能把这条路由一次性补进多把访问密钥的白名单。
             </p>
           </div>
           <Button
@@ -372,9 +376,21 @@ export default function ModelsPage() {
           open={editTarget !== null}
           saving={saving}
           onOpenChange={(v) => !v && setEditTarget(null)}
+          onQuickApply={() => setApplyTarget(editTarget)}
           onSave={(forward, multiplierText, onDone) =>
             void onSaveRoute(editTarget, forward, multiplierText, onDone)
           }
+        />
+      )}
+
+      {/* 快速应用：把这条「块/模型」路由增量写进密钥白名单 */}
+      {applyTarget && (
+        <ModelApplyKeysDialog
+          key={`${applyTarget.blockId}/${applyTarget.modelName}`}
+          target={applyTarget}
+          open={applyTarget !== null}
+          onOpenChange={(v) => !v && setApplyTarget(null)}
+          onAuthFail={handleAuthFail}
         />
       )}
     </div>
@@ -388,6 +404,7 @@ function ModelRouteDialog({
   open,
   saving,
   onOpenChange,
+  onQuickApply,
   onSave,
 }: {
   target: IEditTarget;
@@ -395,6 +412,8 @@ function ModelRouteDialog({
   open: boolean;
   saving: boolean;
   onOpenChange: (v: boolean) => void;
+  /** 打开「快速应用」：把这条路由补进若干密钥的白名单。 */
+  onQuickApply: () => void;
   onSave: (forward: string, multiplierText: string, onDone: () => void) => void;
 }) {
   const entry = block?.models.find((m) => m.name === target.modelName);
@@ -438,17 +457,27 @@ function ModelRouteDialog({
             </p>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
+        <DialogFooter className="sm:justify-between">
           <Button
+            variant="outline"
             className="rounded-full"
             disabled={saving}
-            onClick={() => onSave(forward, multiplierText, () => onOpenChange(false))}
+            onClick={onQuickApply}
           >
-            {saving ? '保存中…' : '保存'}
+            <Zap className="size-3.5" /> 快速应用
           </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)}>
+              取消
+            </Button>
+            <Button
+              className="rounded-full"
+              disabled={saving}
+              onClick={() => onSave(forward, multiplierText, () => onOpenChange(false))}
+            >
+              {saving ? '保存中…' : '保存'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

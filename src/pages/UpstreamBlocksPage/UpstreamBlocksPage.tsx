@@ -237,16 +237,20 @@ function BlockKeysDialog({
     return <Badge variant="destructive" className="rounded-full">已停用</Badge>;
   };
 
-  /** 密钥展示：默认只露前缀，悬停看错误信息；眼睛展开完整明文。 */
+  /**
+   * 密钥展示：默认显示密钥 ID（定长 16 位，完整展示也不会撑破布局），
+   * 点眼睛才切到完整明文——明文只在需要时露面。
+   */
   const secretView = (k: IUpstreamKey) => {
     const revealed = revealedId === k.id;
+    const shown = revealed ? k.secret : k.id;
     return (
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <code
           className="min-w-0 flex-1 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
-          title={k.last_error ?? (revealed ? k.secret : '点击右侧眼睛查看完整密钥')}
+          title={k.last_error ?? shown}
         >
-          {revealed ? k.secret : `${k.secret.slice(0, 12)}…`}
+          {shown}
         </code>
         <Button
           variant="ghost"
@@ -254,9 +258,11 @@ function BlockKeysDialog({
           className="size-7 shrink-0 rounded-full text-muted-foreground"
           onClick={() => setRevealedId((prev) => (prev === k.id ? null : k.id))}
           aria-label={revealed ? '隐藏完整密钥' : '查看完整密钥'}
+          title={revealed ? '点击隐藏，回到密钥 ID' : '点击查看完整密钥明文'}
         >
           {revealed ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
         </Button>
+        {/* 复制恒指向完整明文，与眼睛是否展开无关 */}
         <Button
           variant="ghost"
           size="icon"
@@ -265,7 +271,8 @@ function BlockKeysDialog({
             void copyToClipboard(k.secret);
             toast.success('已复制完整密钥');
           }}
-          aria-label="复制密钥"
+          aria-label="复制完整密钥"
+          title="复制完整密钥"
         >
           <Copy className="size-3.5" />
         </Button>

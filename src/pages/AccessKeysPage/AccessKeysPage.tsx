@@ -112,9 +112,21 @@ function ModelPicker({
   );
 }
 
+/**
+ * 一次取多少把密钥。
+ *
+ * `/api/keys` 是 page/page_size 分页（不是游标），单页上限 100。下游密钥一般
+ * 不多，所以「翻页」就在前端按页追加，不动后端接口。
+ */
+const KEY_PAGE_SIZE = 100;
+
 export default function AccessKeysPage() {
   const navigate = useNavigate();
   const [keys, setKeys] = useState<IAccessKey[] | null>(null);
+  /** 后端报的总数——用来决定还要不要「加载更多」。 */
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -157,8 +169,13 @@ export default function AccessKeysPage() {
   const load = useCallback(async () => {
     try {
       // 白名单的候选模型来自各块的配置，和密钥一起取。
-      const [list, blocks] = await Promise.all([api.listKeys(), api.listBlocks()]);
+      const [list, blocks] = await Promise.all([
+        api.listKeys({ page: 1, page_size: KEY_PAGE_SIZE }),
+        api.listBlocks(),
+      ]);
       setKeys(list.keys);
+      setTotal(list.total);
+      setPage(1);
 
       // 白名单的候选是「块 + 模型」的全名：同一个模型名在不同块是两条独立授权，
       // 出口与价格都可能不同，所以必须能分别勾选。
@@ -176,6 +193,26 @@ export default function AccessKeysPage() {
     }
   }, [handleAuthFail]);
 
+  /** 增量加载下一页：追加到现有列表后面（搜索仍在前端对已加载的部分生效）。 */
+  const loadMore = useCallback(async () => {
+    if (loadingMore || keys === null || keys.length >= total) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.listKeys({ page: page + 1, page_size: KEY_PAGE_SIZE });
+      setKeys((prev) => [...(prev ?? []), ...next.keys]);
+      setPage(page + 1);
+      setTotal(next.total);
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        handleAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [keys, total, page, loadingMore, handleAuthFail]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -187,8 +224,11 @@ export default function AccessKeysPage() {
       if (statusFilter === 'active' && !k.enabled) return false;
       if (statusFilter === 'disabled' && k.enabled) return false;
       if (!kw) return true;
+      // 列表里露的是密钥 ID，所以它也要能搜——否则从日志抄来的 ID 对不上。
       return (
-        k.name.toLowerCase().includes(kw) || k.key_prefix.toLowerCase().includes(kw)
+        k.name.toLowerCase().includes(kw) ||
+        k.id.toLowerCase().includes(kw) ||
+        k.key_prefix.toLowerCase().includes(kw)
       );
     });
   }, [keys, search, statusFilter]);
@@ -307,9 +347,9 @@ export default function AccessKeysPage() {
     }
   };
 
-  const copySecret = async (secret: string) => {
-    const ok = await copyToClipboard(secret);
-    if (ok) toast.success('已复制到剪贴板');
+  const copyText = async (text: string, label: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(label);
     else toast.error('复制失败，请手动选择复制');
   };
 
@@ -320,9 +360,10 @@ export default function AccessKeysPage() {
           <CardTitle className="flex items-center gap-2 text-xl">
             <KeyRound className="size-5 text-primary" /> 访问密钥
           </CardTitle>
-          <CardDescription>
-            密钥明文可随时查看——列表里点击前缀即可展开，或到详情里复制
-          </CardDescription>
+            <CardDescription>
+              「密钥」列默认显示密钥 ID（与请求日志里的「密钥」是同一个值，便于对照），
+              点右侧眼睛查看完整明文
+            </CardDescription>
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -330,7 +371,7 @@ export default function AccessKeysPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索名称或密钥前缀"
+                placeholder="搜索名称、密钥 ID 或前缀"
                 className="rounded-full bg-background pl-9"
               />
             </div>
@@ -352,9 +393,8 @@ export default function AccessKeysPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="whitespace-nowrap">名称</TableHead>
-                  <TableHead className="whitespace-nowrap">密钥前缀</TableHead>
+                  <TableHead className="whitespace-nowrap">密钥</TableHead>
                   <TableHead className="whitespace-nowrap">剩余额度</TableHead>
-                  <TableHead className="whitespace-nowrap">允许模型</TableHead>
                   <TableHead className="whitespace-nowrap">状态</TableHead>
                   <TableHead className="whitespace-nowrap">最近使用</TableHead>
                   <TableHead className="whitespace-nowrap text-right">操作</TableHead>
@@ -364,54 +404,60 @@ export default function AccessKeysPage() {
                 {keys === null ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={6}>
                         <Skeleton className="h-8 w-full rounded-lg" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                       {keys.length === 0
                         ? '暂无密钥，点击右下角按钮创建第一把'
                         : '没有匹配筛选条件的密钥'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((k) => (
+                  filtered.map((k) => {
+                    // 默认展示密钥 ID（与日志里的「密钥」同值，方便互相对照），
+                    // 点眼睛才切到完整明文。
+                    const revealed = revealedId === k.id;
+                    const shown = revealed ? (k.secret ?? '') : k.id;
+                    return (
                     <TableRow key={k.id}>
                       <TableCell className="font-medium">
                         <span className="block max-w-[180px] truncate">{k.name || '未命名'}</span>
                       </TableCell>
                       <TableCell>
-                        {/* 默认只显示前缀，点击才展开完整密钥 */}
                         <div className="flex items-center gap-1">
+                          {/* ID 定长 16 位，直接完整展示；明文只有展开时才出现 */}
                           <button
                             type="button"
                             onClick={() => setRevealedId((prev) => (prev === k.id ? null : k.id))}
-                            className="flex max-w-[240px] items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-xs transition-colors hover:bg-muted"
-                            title={revealedId === k.id ? '点击隐藏' : '点击显示完整密钥'}
+                            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-xs whitespace-nowrap transition-colors hover:bg-muted"
+                            title={revealed ? '点击隐藏，回到密钥 ID' : '点击查看完整密钥明文'}
                           >
-                            <span className="truncate">
-                              {revealedId === k.id ? k.secret : `${k.key_prefix}…`}
-                            </span>
-                            {revealedId === k.id ? (
+                            <span>{shown}</span>
+                            {revealed ? (
                               <EyeOff className="size-3.5 shrink-0 text-muted-foreground" />
                             ) : (
                               <Eye className="size-3.5 shrink-0 text-muted-foreground" />
                             )}
                           </button>
-                          {revealedId === k.id && k.secret && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-7 rounded-full"
-                              onClick={() => void copySecret(k.secret as string)}
-                              aria-label="复制密钥"
-                            >
-                              <Copy className="size-3.5" />
-                            </Button>
-                          )}
+                          {/* 复制恒指向完整明文：与眼睛是否展开无关（这样也能
+                              不看明文就复制），按钮语义固定，不会随显示状态漂移 */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 shrink-0 rounded-full"
+                            onClick={() => {
+                              if (k.secret) void copyText(k.secret, '已复制完整密钥');
+                            }}
+                            aria-label="复制完整密钥"
+                            title="复制完整密钥"
+                          >
+                            <Copy className="size-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
@@ -420,11 +466,6 @@ export default function AccessKeysPage() {
                         ) : (
                           formatCredits(k.credits)
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="block max-w-[200px] truncate text-muted-foreground">
-                          {k.allowed_models ? k.allowed_models.join(', ') : '不限制'}
-                        </span>
                       </TableCell>
                       <TableCell>
                         {k.enabled ? (
@@ -492,11 +533,28 @@ export default function AccessKeysPage() {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {/* 增量加载：后端每页 100，取完为止（密钥数量通常远小于此） */}
+          {keys !== null && keys.length < total && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore && <Loader2 className="size-4 animate-spin" />}
+                {loadingMore ? '加载中…' : `加载更多（已显示 ${keys.length}/${total}）`}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -589,7 +647,7 @@ export default function AccessKeysPage() {
               size="icon"
               variant="ghost"
               className="size-8 shrink-0 rounded-full"
-              onClick={() => createdSecret && void copySecret(createdSecret)}
+              onClick={() => createdSecret && void copyText(createdSecret, '已复制到剪贴板')}
               aria-label="复制密钥"
             >
               <Copy className="size-4" />
@@ -798,7 +856,9 @@ function KeyUsageDialog({
             {accessKey.name || '未命名'}
           </DialogTitle>
           <DialogDescription>
-            前缀 {accessKey.key_prefix}…；{usage?.retention_days ? `最近 ${usage.retention_days} 天内的` : ''}用量记录，更早的已按保留期回收
+            {/* 省略号本身就说明没写全，「前缀」两字是噪音，去掉后给内容腾地方 */}
+            {accessKey.key_prefix}…{' '}
+            {usage?.retention_days ? `最近 ${usage.retention_days} 天内的` : ''}用量记录，更早的已按保留期回收
           </DialogDescription>
         </DialogHeader>
 
