@@ -288,7 +288,7 @@ function BlockKeysDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle>块内密钥 · {block?.name}</DialogTitle>
           <DialogDescription>
-            密钥生命周期自治：成功清零失败计数、429 退避 30 秒、连续失败 3 次自动停用
+            密钥生命周期自治：成功清零失败计数；密钥被拒（401/403）连续 3 次自动停用，限流与上游故障走指数退避、不停用
           </DialogDescription>
         </DialogHeader>
 
