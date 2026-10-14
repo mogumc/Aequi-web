@@ -12,6 +12,8 @@ import {
   Pause,
   Play,
   Plus,
+  ShieldCheck,
+  ShieldOff,
   Trash2,
 } from 'lucide-react';
 
@@ -40,6 +42,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -72,6 +76,9 @@ import { HeaderEditor } from '@/components/header-editor';
 
 const API_FORMATS = ['openai', 'google', 'anthropic'] as const;
 
+/** 块的并发上限天花板——与后端 `MAX_BLOCK_CONCURRENCY` 同步（0 = 不限制）。 */
+const MAX_BLOCK_CONCURRENCY = 1024;
+
 /** 块内密钥管理对话框 */
 function BlockKeysDialog({
   block,
@@ -92,6 +99,13 @@ function BlockKeysDialog({
   const [revealedId, setRevealedId] = useState<string | null>(null);
   // 一键测试全部：前端按顺序逐把发送，进度 {done, total} 驱动按钮文案。
   const [testAll, setTestAll] = useState<{ done: number; total: number } | null>(null);
+  // 新增密钥的初始值。后端只在**新增**时收权重与「永不暂停」，
+  // 所以这两项属于「本批入库即生效」的配置；已有密钥两者都能改——
+  // 永不暂停在行上讲，权重点数字改。
+  const [newWeight, setNewWeight] = useState('1');
+  const [newNeverDisable, setNewNeverDisable] = useState(false);
+  // 正在编辑权重的密钥与草稿值（null = 没有弹层在开）。
+  const [weightEdit, setWeightEdit] = useState<{ id: string; text: string } | null>(null);
 
   const blockId = block?.id ?? '';
 
@@ -153,6 +167,69 @@ function BlockKeysDialog({
     }
   };
 
+  /**
+   * 单把密钥的「永不暂停」开关。
+   *
+   * 后端是批量接口，这里一次只传一把——开关天然是逐把的。
+   * 免的只是**自动停用**：退避照常、手动暂停/恢复不受影响，
+   * 手动测试确认无效仍然停用。
+   */
+  const onToggleNeverDisable = async (key: IUpstreamKey) => {
+    if (!blockId || busyId !== null) return;
+    const next = !key.never_disable;
+    setBusyId(key.id);
+    try {
+      await api.setBlockKeysNeverDisable(blockId, [key.id], next);
+      setKeys(
+        (prev) => prev?.map((k) => (k.id === key.id ? { ...k, never_disable: next } : k)) ?? prev,
+      );
+      toast.success(next ? '已设为永不暂停' : '已取消永不暂停');
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        onAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '操作失败，请稍后重试');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * 改一把密钥的调度权重。
+   *
+   * 门卫与块权重同一口径：`<= 0` 一律拒（后端同样）。非正权重在轮询里
+   * 永远攒不到份额，等于「启用着但永远选不中」，界面上看不出来；
+   * 想让它不上岗请用暂停。
+   */
+  const onSaveWeight = async (key: IUpstreamKey) => {
+    if (!blockId || busyId !== null) return;
+    const weight = Number((weightEdit?.text ?? '').trim());
+    if (!Number.isInteger(weight) || weight <= 0) {
+      toast.error('权重必须是正整数');
+      return;
+    }
+    if (weight === key.weight) {
+      setWeightEdit(null);
+      return;
+    }
+    setBusyId(key.id);
+    try {
+      await api.setBlockKeysWeight(blockId, [key.id], weight);
+      setKeys((prev) => prev?.map((k) => (k.id === key.id ? { ...k, weight } : k)) ?? prev);
+      toast.success(`权重已设为 ${weight}`);
+      setWeightEdit(null);
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        onAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '操作失败，请稍后重试');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const onTest = async (keyId: string) => {
     if (!blockId || busyId !== null) return;
     setBusyId(keyId);
@@ -202,9 +279,19 @@ function BlockKeysDialog({
       toast.error('请输入至少一条上游密钥');
       return;
     }
+    // 权重 0 会让这把密钥永远选不中（平滑加权轮询里没有份额），
+    // 所以只收正整数——失败计数与退避已经能表达「暂时别用它」。
+    const weight = Number(newWeight.trim());
+    if (!Number.isInteger(weight) || weight <= 0) {
+      toast.error('权重必须是正整数');
+      return;
+    }
     setAdding(true);
     try {
-      const { keys, skipped } = await api.addBlockKeys(blockId, secrets);
+      const { keys, skipped } = await api.addBlockKeys(blockId, secrets, {
+        weight,
+        neverDisable: newNeverDisable,
+      });
       if (keys.length === 0) {
         toast.warning(`没有新增密钥：${skipped} 条与已有密钥重复`);
       } else if (skipped > 0) {
@@ -325,9 +412,10 @@ function BlockKeysDialog({
                 <div className="flex items-center gap-2 border-b border-border/60 px-2.5 pb-1.5 text-xs text-muted-foreground">
                   <span className="min-w-0 flex-1">密钥</span>
                   <span className="w-16 shrink-0">状态</span>
+                  <span className="w-12 shrink-0 text-center">权重</span>
                   <span className="w-12 shrink-0 text-center">失败</span>
                   <span className="w-28 shrink-0">最近使用</span>
-                  <span className="w-[100px] shrink-0 text-right">操作</span>
+                  <span className="w-[124px] shrink-0 text-right">操作</span>
                 </div>
               )}
               <VirtualList
@@ -344,6 +432,55 @@ function BlockKeysDialog({
                   <div className="flex h-12 w-full items-center gap-2 rounded-lg border border-border/60 px-2.5">
                     {secretView(k)}
                     <div className="w-16 shrink-0">{statusBadge(k.status)}</div>
+                    {/* 权重是低频设置，但仍要能改：点数字开一个小弹层。
+                        用 Popover 而不是常驻输入框——一行 4 个按钮已经够挤了。 */}
+                    <Popover
+                      open={weightEdit?.id === k.id}
+                      onOpenChange={(open) =>
+                        setWeightEdit(open ? { id: k.id, text: String(k.weight) } : null)
+                      }
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-12 shrink-0 rounded-md text-center text-xs tabular-nums text-muted-foreground hover:bg-muted"
+                          title="块内调度权重：多把密钥按平滑加权轮询分配流量。点击修改"
+                        >
+                          {k.weight}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-60 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`key-weight-${k.id}`}>调度权重</Label>
+                          <Input
+                            id={`key-weight-${k.id}`}
+                            inputMode="numeric"
+                            value={weightEdit?.text ?? ''}
+                            onChange={(e) =>
+                              setWeightEdit({ id: k.id, text: e.target.value })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void onSaveWeight(k);
+                              }
+                            }}
+                            className="h-8 rounded-lg text-xs tabular-nums"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            块内多把密钥按权重分流，必须是正整数；要不让它上岗请用暂停
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="w-full rounded-full"
+                          disabled={busyId === k.id}
+                          onClick={() => void onSaveWeight(k)}
+                        >
+                          保存
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
                     <span
                       className="w-12 shrink-0 text-center text-xs tabular-nums text-muted-foreground"
                       title={k.failure_count > 0 ? '连续失败次数' : undefined}
@@ -353,7 +490,7 @@ function BlockKeysDialog({
                     <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">
                       {k.last_used_at ? formatDateTime(k.last_used_at) : '从未'}
                     </span>
-                    <div className="flex w-[100px] shrink-0 justify-end gap-1">
+                    <div className="flex w-[124px] shrink-0 justify-end gap-1">
                       <Button
                         size="icon"
                         variant="ghost"
@@ -366,6 +503,27 @@ function BlockKeysDialog({
                           <Loader2 className="size-4 animate-spin" />
                         ) : (
                           <FlaskConical className="size-4" />
+                        )}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={`size-7 rounded-full ${
+                          k.never_disable ? 'text-success' : 'text-muted-foreground'
+                        }`}
+                        disabled={busyId === k.id || testAll !== null}
+                        onClick={() => void onToggleNeverDisable(k)}
+                        aria-label={k.never_disable ? '取消永不暂停' : '设为永不暂停'}
+                        title={
+                          k.never_disable
+                            ? '已设永不暂停：连续被拒也不会自动停用。点击取消'
+                            : '设为永不暂停：只免自动停用，限流与故障的退避照常'
+                        }
+                      >
+                        {k.never_disable ? (
+                          <ShieldCheck className="size-4" />
+                        ) : (
+                          <ShieldOff className="size-4" />
                         )}
                       </Button>
                       {k.status === 'paused' ? (
@@ -417,14 +575,37 @@ function BlockKeysDialog({
               className="min-h-20 rounded-lg font-mono text-xs"
               placeholder={'sk-proj-xxxx\nsk-proj-yyyy'}
             />
-            <Button
-              variant="secondary"
-              className="rounded-full"
-              disabled={adding}
-              onClick={() => void onAdd()}
-            >
-              <Plus className="size-4" /> {adding ? '添加中…' : '批量添加'}
-            </Button>
+            {/* 权重与永不暂停在这里设的是**这批新密钥**的初始值；
+                已有密钥两者都能改——永不暂停在行上的盾牌，权重点行上的数字。 */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="add-key-weight" className="text-xs text-muted-foreground">
+                  权重
+                </Label>
+                <Input
+                  id="add-key-weight"
+                  inputMode="numeric"
+                  value={newWeight}
+                  onChange={(e) => setNewWeight(e.target.value)}
+                  className="h-9 w-20 rounded-lg tabular-nums"
+                />
+              </div>
+              <label className="flex h-9 cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={newNeverDisable}
+                  onCheckedChange={(checked) => setNewNeverDisable(checked === true)}
+                />
+                永不暂停
+              </label>
+              <Button
+                variant="secondary"
+                className="ml-auto rounded-full"
+                disabled={adding}
+                onClick={() => void onAdd()}
+              >
+                <Plus className="size-4" /> {adding ? '添加中…' : '批量添加'}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -443,6 +624,8 @@ export default function UpstreamBlocksPage() {
   const [formName, setFormName] = useState('');
   const [formFormat, setFormFormat] = useState<string>('openai');
   const [formWeight, setFormWeight] = useState('1');
+  // 同时发往该上游的请求数上限；'0' = 不限制。
+  const [formConcurrency, setFormConcurrency] = useState('0');
   const [formBaseUrl, setFormBaseUrl] = useState('');
   const [formProxy, setFormProxy] = useState('');
   // 编辑期允许半成品行（只有名字、或整行空白），提交前统一 clean。
@@ -502,6 +685,7 @@ export default function UpstreamBlocksPage() {
     setFormName('');
     setFormFormat('openai');
     setFormWeight('1');
+    setFormConcurrency('0');
     setFormBaseUrl('');
     setFormProxy('');
     setFormHeaders([]);
@@ -517,6 +701,7 @@ export default function UpstreamBlocksPage() {
     setFormName(b.name);
     setFormFormat(b.api_format);
     setFormWeight(String(b.weight));
+    setFormConcurrency(String(b.max_concurrency ?? 0));
     setFormBaseUrl(b.base_url);
     setFormProxy(b.proxy ?? '');
     setFormHeaders(b.headers ?? []);
@@ -556,9 +741,19 @@ export default function UpstreamBlocksPage() {
       toast.error('请填写 Block ID、名称与 Base URL');
       return;
     }
-    const weight = Number(formWeight);
-    if (Number.isNaN(weight) || weight <= 0) {
-      toast.error('权重必须是正数');
+    // 权重与并发上限在后端都是 u32：小数会直接 400，这里先挡一道。
+    const weight = Number(formWeight.trim());
+    if (!Number.isInteger(weight) || weight <= 0) {
+      toast.error('权重必须是正整数');
+      return;
+    }
+    const maxConcurrency = Number(formConcurrency.trim() || '0');
+    if (
+      !Number.isInteger(maxConcurrency) ||
+      maxConcurrency < 0 ||
+      maxConcurrency > MAX_BLOCK_CONCURRENCY
+    ) {
+      toast.error(`并发上限必须是 0-${MAX_BLOCK_CONCURRENCY} 的整数（0 = 不限制）`);
       return;
     }
     // 自定义头先在本地挡一道（与后端同一套规则），省一趟注定 400 的往返。
@@ -572,6 +767,7 @@ export default function UpstreamBlocksPage() {
       name: formName.trim(),
       api_format: formFormat as IBlockInput['api_format'],
       weight,
+      max_concurrency: maxConcurrency,
       base_url: formBaseUrl.trim(),
       proxy: formProxy.trim() || null,
       models: formModelList,
@@ -710,7 +906,12 @@ export default function UpstreamBlocksPage() {
                           再挂一个徽章——排队数持续不降才是真该扩容的信号。 */}
                       <TableCell>
                         {(b.max_concurrency ?? 0) === 0 ? (
-                          <span className="text-muted-foreground">不限</span>
+                          <span
+                            className="text-muted-foreground"
+                            title="不限制并发时没有闸门，也就没有在途与排队这两个数；想看在途负载就在「编辑」里设一个并发上限"
+                          >
+                            不限
+                          </span>
                         ) : (
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span
@@ -820,7 +1021,7 @@ export default function UpstreamBlocksPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label>API 格式</Label>
                 <Select value={formFormat} onValueChange={setFormFormat}>
@@ -840,10 +1041,20 @@ export default function UpstreamBlocksPage() {
                 <Label htmlFor="block-weight">权重</Label>
                 <Input
                   id="block-weight"
-                  inputMode="decimal"
+                  inputMode="numeric"
                   value={formWeight}
                   onChange={(e) => setFormWeight(e.target.value)}
-                  className="rounded-lg"
+                  className="rounded-lg tabular-nums"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="block-concurrency">并发上限</Label>
+                <Input
+                  id="block-concurrency"
+                  inputMode="numeric"
+                  value={formConcurrency}
+                  onChange={(e) => setFormConcurrency(e.target.value)}
+                  className="rounded-lg tabular-nums"
                 />
               </div>
             </div>

@@ -89,10 +89,7 @@ export function HeaderEditor({
 
       <p className="text-xs text-muted-foreground">
         发往该上游的每个请求（含测试密钥与拉取模型）都会带上这些头；
-        <strong>同名会盖掉内置的认证头与各家固定头</strong>，所以也能用来换掉
-        <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">Authorization</code>
-        这类写法。头名大小写不敏感、不能重复；头值取不到块里的上游密钥，要填就得填死。
-        由 HTTP 栈自己管的头（Content-Length、Connection 之类）不允许配置。
+        <strong>同名会盖掉内置的认证头与各家固定头</strong>，包括<code>Authorization</code>。由 HTTP 栈自己管的头（Content-Length、Connection 之类）不允许配置。
       </p>
     </div>
   );

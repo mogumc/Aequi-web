@@ -282,11 +282,25 @@ export const api = {
     const res = await request<{ keys: IUpstreamKey[] }>(`/api/blocks/${id}/keys`);
     return res.keys;
   },
-  /** 返回真正入库的密钥与被跳过的重复数量（重复自动跳过，不报错）。 */
-  addBlockKeys: (id: string, secrets: string[], weight?: number) =>
+  /**
+   * 返回真正入库的密钥与被跳过的重复数量（重复自动跳过，不报错）。
+   *
+   * `weight` 与 `neverDisable` 是**入库即生效**的初始值；入库之后
+   * 权重用 `setBlockKeysWeight` 改（`PATCH` 无此字段），
+   * 永不暂停用 `setBlockKeysNeverDisable` 改。
+   */
+  addBlockKeys: (
+    id: string,
+    secrets: string[],
+    options?: { weight?: number; neverDisable?: boolean },
+  ) =>
     request<{ keys: IUpstreamKey[]; skipped: number }>(`/api/blocks/${id}/keys`, {
       method: 'POST',
-      body: JSON.stringify(weight != null ? { secrets, weight } : { secrets }),
+      body: JSON.stringify({
+        secrets,
+        ...(options?.weight != null ? { weight: options.weight } : {}),
+        ...(options?.neverDisable ? { never_disable: true } : {}),
+      }),
     }),
   removeBlockKeys: (id: string, ids: string[]) =>
     request<void>(`/api/blocks/${id}/keys/remove`, {
@@ -302,6 +316,18 @@ export const api = {
     request<void>(`/api/blocks/${id}/keys/resume`, {
       method: 'POST',
       body: JSON.stringify({ ids }),
+    }),
+  /** 批量设置「永不暂停」：免的是自动停用（退避与手动操作照旧）。 */
+  setBlockKeysNeverDisable: (id: string, ids: string[], enabled: boolean) =>
+    request<void>(`/api/blocks/${id}/keys/never-disable`, {
+      method: 'POST',
+      body: JSON.stringify({ ids, enabled }),
+    }),
+  /** 批量设置调度权重（块内平滑加权轮询的份额）。0 会被后端拒——要停用用暂停。 */
+  setBlockKeysWeight: (id: string, ids: string[], weight: number) =>
+    request<void>(`/api/blocks/${id}/keys/weight`, {
+      method: 'POST',
+      body: JSON.stringify({ ids, weight }),
     }),
   /** 拉取上游模型列表。只有已保存的块才有出口与密钥可用来发这次请求。 */
   fetchBlockModels: async (id: string) => {

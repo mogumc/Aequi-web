@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Textarea } from '@/components/ui/textarea';
+import { ExtraBodyInput } from '@/components/extra-body-input';
 import { MultiplierInput } from '@/components/multiplier-input';
 import { VirtualList } from '@/components/virtual-list';
 import type { IBlockModel } from '@/data/admin';
@@ -27,108 +27,14 @@ const AVAILABLE_ROW_HEIGHT = 36;
 const MODEL_ROW_HEIGHT = 48;
 
 /**
- * 网关掌管的请求体键——与后端 `PROTECTED_BODY_KEYS` 同步。
- *
- * 前端挡一道只是为了让用户早点看到问题；真正的关口在后端（那里会 400）。
- * 名单不同步时以后端为准。
- */
-const PROTECTED_EXTRA_BODY_KEYS = [
-  'model',
-  'messages',
-  'contents',
-  'input',
-  'system',
-  'system_instruction',
-  'stream',
-  'stream_options',
-  'tools',
-  'tool_choice',
-];
-
-/**
- * 额外请求体输入（JSON 对象，草稿模式）。
- *
- * 编辑期间**不回写**受控值再回灌显示——中途的 `{"top_k": 4` 不是合法
- * JSON，强行回写会把用户正在打的字吃掉。合法即提交，非法只提示。
- */
-function ExtraBodyInput({
-  modelName,
-  value,
-  onCommit,
-}: {
-  modelName: string;
-  value?: Record<string, unknown>;
-  onCommit: (next: Record<string, unknown> | undefined) => void;
-}) {
-  const [draft, setDraft] = useState(() => (value ? JSON.stringify(value) : ''));
-  const [error, setError] = useState<string | null>(null);
-
-  const handle = (raw: string) => {
-    setDraft(raw);
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      setError(null);
-      onCommit(undefined);
-      return;
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      setError('不是合法的 JSON');
-      return;
-    }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      setError('必须是 JSON 对象，例如 {"top_k": 40}');
-      return;
-    }
-
-    const blocked = Object.keys(parsed).filter((key) => PROTECTED_EXTRA_BODY_KEYS.includes(key));
-    if (blocked.length > 0) {
-      setError(`这些字段由网关掌管，不能覆盖：${blocked.join('、')}`);
-      return;
-    }
-
-    setError(null);
-    const object = parsed as Record<string, unknown>;
-    // 空对象视同没配——和后端的口径一致。
-    onCommit(Object.keys(object).length > 0 ? object : undefined);
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={`extra-body-${modelName}`}>额外请求体（高级）</Label>
-      <Textarea
-        id={`extra-body-${modelName}`}
-        value={draft}
-        onChange={(e) => handle(e.target.value)}
-        rows={3}
-        spellCheck={false}
-        placeholder='{"top_k": 40}'
-        className="rounded-lg font-mono text-xs"
-      />
-      {error ? (
-        <p className="text-xs text-destructive">{error}</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          按上游格式书写，顶层合并；网关掌管的字段（model / messages / stream 等）会被拒。
-          只有管理端能配，下游请求体里带同名键无效。
-        </p>
-      )}
-    </div>
-  );
-}
-
-/**
  * 块的模型编辑器。
  *
  * 主路径是从上游拉一份列表勾选加入——手输模型名既容易写错，也没人记得住
  * 上游到底有哪些模型。但确实有上游不提供列模型接口，也有些模型不在返回的
  * 列表里，所以保留手动添加这条路。
  *
- * 模型多时支持一键全选 / 一键清空；转发名与倍率属于低频设置，收进每行的
- * 「转发与倍率」弹层，不再常驻占宽度。两个列表都做了虚拟滚动。
+ * 模型多时支持一键全选 / 一键清空；转发名、倍率与额外请求体属于低频设置，
+ * 收进每行的齿轮弹层，不再常驻占宽度。两个列表都做了虚拟滚动。
  */
 export function ModelEditor({
   models,
@@ -349,7 +255,7 @@ export function ModelEditor({
                         variant="ghost"
                         size="icon"
                         className="size-8 shrink-0 rounded-full text-muted-foreground"
-                        aria-label={`设置 ${model.name} 的转发与倍率`}
+                        aria-label={`设置 ${model.name} 的转发、倍率与额外请求体`}
                       >
                         <Settings2 className="size-4" />
                       </Button>
@@ -380,7 +286,7 @@ export function ModelEditor({
                         </p>
                       </div>
                       <ExtraBodyInput
-                        modelName={model.name}
+                        id={`extra-body-${model.name}`}
                         value={model.extra_body}
                         onCommit={(next) => patch(model.name, { extra_body: next })}
                       />
