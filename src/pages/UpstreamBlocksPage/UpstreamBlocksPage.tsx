@@ -106,8 +106,22 @@ function BlockKeysDialog({
   const [newNeverDisable, setNewNeverDisable] = useState(false);
   // 正在编辑权重的密钥与草稿值（null = 没有弹层在开）。
   const [weightEdit, setWeightEdit] = useState<{ id: string; text: string } | null>(null);
+  // 测试用的模型：单把测试与一键测试共用同一个。
+  // 测试发的是真实对话请求（不再走列表模型接口——很多上游没有那个接口），
+  // 所以必须挑一个模型；默认块里配的第一个。
+  const [testModel, setTestModel] = useState('');
 
   const blockId = block?.id ?? '';
+  const blockModels = block?.models ?? [];
+
+  // 换块或模型清单变化时把测试模型收敛到清单里的一个，避免选中已删掉的模型。
+  useEffect(() => {
+    if (blockModels.length === 0) {
+      setTestModel('');
+      return;
+    }
+    setTestModel((prev) => (blockModels.some((m) => m.name === prev) ? prev : blockModels[0].name));
+  }, [blockModels]);
 
   const loadKeys = useCallback(async () => {
     if (!blockId) return;
@@ -232,10 +246,14 @@ function BlockKeysDialog({
 
   const onTest = async (keyId: string) => {
     if (!blockId || busyId !== null) return;
+    if (!testModel) {
+      toast.error('请先在块里配置一个模型，再测试密钥');
+      return;
+    }
     setBusyId(keyId);
-    toast.info('正在测试密钥（走列表模型接口，不消耗 token）…');
+    toast.info(`正在用模型 ${testModel} 发一次真实请求测试（会消耗少量 token）…`);
     try {
-      await api.testBlockKey(blockId, keyId);
+      await api.testBlockKey(blockId, keyId, testModel);
       toast.success('测试完成，最新状态已落库');
     } catch (e) {
       if (isUnauthorized(e)) {
@@ -252,13 +270,18 @@ function BlockKeysDialog({
   /**
    * 一键测试全部：前端按顺序逐把发送单把测试请求，不需要后端批量接口。
    * 单把失败（网络抖动等）不中断整轮，最终状态以刷新后的落库结果为准。
+   * 整块用同一个模型——与后端「不传模型时取块内第一个」的口径一致。
    */
   const onTestAll = async () => {
     if (!blockId || testAll !== null || keys === null || keys.length === 0) return;
+    if (!testModel) {
+      toast.error('请先在块里配置一个模型，再测试密钥');
+      return;
+    }
     setTestAll({ done: 0, total: keys.length });
     for (const k of keys) {
       try {
-        await api.testBlockKey(blockId, k.id);
+        await api.testBlockKey(blockId, k.id, testModel);
       } catch {
         // 单把失败不算整轮失败，坏密钥会被测试接口自动停用。
       }
@@ -383,11 +406,32 @@ function BlockKeysDialog({
           {keys !== null && keys.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">共 {keys.length} 条密钥</span>
+              {blockModels.length > 0 ? (
+                <Select value={testModel} onValueChange={setTestModel}>
+                  <SelectTrigger
+                    className="ml-auto h-8 w-44 rounded-full text-xs"
+                    title="测试用模型：测试会用它发一次真实请求，会消耗少量 token"
+                  >
+                    <SelectValue placeholder="选择测试模型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {blockModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name} className="text-xs">
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  块里还没配模型，无法测试
+                </span>
+              )}
               <Button
                 variant="outline"
                 size="sm"
-                className="ml-auto h-8 rounded-full text-xs"
-                disabled={testAll !== null || busyId !== null}
+                className={`${blockModels.length > 0 ? '' : 'ml-auto '}h-8 rounded-full text-xs`}
+                disabled={testAll !== null || busyId !== null || blockModels.length === 0}
                 onClick={() => void onTestAll()}
               >
                 {testAll ? (
@@ -498,6 +542,7 @@ function BlockKeysDialog({
                         disabled={busyId === k.id || testAll !== null}
                         onClick={() => void onTest(k.id)}
                         aria-label="测试密钥"
+                        title={`用模型 ${testModel || '（未选）'} 发一次真实请求测试，会消耗少量 token`}
                       >
                         {busyId === k.id ? (
                           <Loader2 className="size-4 animate-spin" />
