@@ -336,8 +336,18 @@ export const api = {
     });
     return res.models;
   },
-  testBlockKey: (id: string, keyId: string) =>
-    request<unknown>(`/api/blocks/${id}/keys/${keyId}/test`, { method: 'POST' }),
+  /**
+   * 测试一把上游密钥。
+   *
+   * 测试发的是**真实对话请求**（不再走列表模型接口——不少上游没有实现它，
+   * 会把好密钥误判成坏的），所以要带一个模型名；不传则由后端取块内第一个。
+   * 会消耗少量 token。
+   */
+  testBlockKey: (id: string, keyId: string, model?: string) =>
+    request<unknown>(`/api/blocks/${id}/keys/${keyId}/test`, {
+      method: 'POST',
+      ...(model ? { body: JSON.stringify({ model }) } : {}),
+    }),
 
   // ---- 请求日志 ----
   /**
