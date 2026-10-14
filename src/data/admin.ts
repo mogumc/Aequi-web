@@ -212,6 +212,12 @@ export interface IUpstreamBlock {
   enabled: boolean;
   key_count?: number;
   available_keys?: number;
+  /** 同时发往该上游的请求数上限。0 = 不限制；达到上限后新请求排队。 */
+  max_concurrency?: number;
+  /** 正在发往上游的请求数（读取瞬间的快照）；不限制并发时为 null。 */
+  in_flight?: number | null;
+  /** 排在并发闸门后的请求数（快照）；持续大于 0 说明上限打满。 */
+  queued?: number | null;
   created_at?: number;
   updated_at?: number;
 }
