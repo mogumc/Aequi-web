@@ -288,7 +288,7 @@ function BlockKeysDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle>块内密钥 · {block?.name}</DialogTitle>
           <DialogDescription>
-            密钥生命周期自治：成功清零失败计数、429 退避 30 秒、连续失败 3 次自动停用
+            密钥生命周期自治：成功清零失败计数；密钥被拒（401/403）连续 3 次自动停用，限流与上游故障走指数退避、不停用
           </DialogDescription>
         </DialogHeader>
 
@@ -463,21 +463,37 @@ export default function UpstreamBlocksPage() {
     navigate('/login', { replace: true });
   }, [navigate]);
 
-  const load = useCallback(async () => {
-    try {
-      const list = await api.listBlocks();
-      setBlocks(list);
-    } catch (e) {
-      if (isUnauthorized(e)) {
-        handleAuthFail();
-        return;
+  /**
+   * 拉取块列表。`quiet` 给定时轮询用：失败时安静跳过——
+   * 后台每几秒刷一次，报错 toast 会比不刷更烦人；真正的加载态
+   * 与首次失败的提示由不带 quiet 的调用负责。
+   */
+  const load = useCallback(
+    async (quiet = false) => {
+      try {
+        const list = await api.listBlocks();
+        setBlocks(list);
+      } catch (e) {
+        if (isUnauthorized(e)) {
+          handleAuthFail();
+          return;
+        }
+        if (!quiet) toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
       }
-      toast.error(e instanceof Error ? e.message : '加载失败，请稍后重试');
-    }
-  }, [handleAuthFail]);
+    },
+    [handleAuthFail],
+  );
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // 并发负载是活数字：在飞数与排队数只在读取瞬间有效，定时刷一遍才叫
+  // 「当前负载」。节奏取 5 秒——比健康检查（60s）快，又不会把管理页
+  // 变成监控盘。
+  useEffect(() => {
+    const timer = window.setInterval(() => void load(true), 5_000);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   const openCreate = () => {
@@ -629,6 +645,12 @@ export default function UpstreamBlocksPage() {
                   <TableHead className="whitespace-nowrap">Base URL</TableHead>
                   <TableHead className="whitespace-nowrap">权重</TableHead>
                   <TableHead className="whitespace-nowrap">可用密钥</TableHead>
+                  <TableHead
+                    className="whitespace-nowrap"
+                    title="正在发往上游的请求数 / 并发上限；不限制并发时显示「不限」"
+                  >
+                    并发
+                  </TableHead>
                   <TableHead className="whitespace-nowrap">模型</TableHead>
                   <TableHead className="whitespace-nowrap text-right">操作</TableHead>
                 </TableRow>
@@ -637,14 +659,14 @@ export default function UpstreamBlocksPage() {
                 {blocks === null ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={8}>
                         <Skeleton className="h-8 w-full rounded-lg" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : blocks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
                       暂无上游块，点击右上角「新建上游」创建
                     </TableCell>
                   </TableRow>
@@ -683,6 +705,32 @@ export default function UpstreamBlocksPage() {
                       <TableCell className="tabular-nums">{b.weight}</TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
                         {b.available_keys ?? '-'} / {b.key_count ?? '-'}
+                      </TableCell>
+                      {/* 实时并发负载：在飞数 / 上限。打满时转警告色，有人排队时
+                          再挂一个徽章——排队数持续不降才是真该扩容的信号。 */}
+                      <TableCell>
+                        {(b.max_concurrency ?? 0) === 0 ? (
+                          <span className="text-muted-foreground">不限</span>
+                        ) : (
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <span
+                              className={`text-sm tabular-nums ${
+                                (b.in_flight ?? 0) >= (b.max_concurrency ?? 0) ? 'text-warning' : ''
+                              }`}
+                              title={`正在发往上游 ${b.in_flight ?? 0} 个请求，上限 ${b.max_concurrency}`}
+                            >
+                              {b.in_flight ?? '-'} / {b.max_concurrency}
+                            </span>
+                            {(b.queued ?? 0) > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="rounded-full bg-warning/10 text-warning"
+                              >
+                                排队 {b.queued}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {b.models.length === 0 ? (

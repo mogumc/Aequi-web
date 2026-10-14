@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
 import { MultiplierInput } from '@/components/multiplier-input';
 import { VirtualList } from '@/components/virtual-list';
 import type { IBlockModel } from '@/data/admin';
@@ -24,6 +25,100 @@ import { MULTIPLIER_SCALE, formatMultiplier } from '@/lib/multiplier';
 /** 列表单行高度。 */
 const AVAILABLE_ROW_HEIGHT = 36;
 const MODEL_ROW_HEIGHT = 48;
+
+/**
+ * 网关掌管的请求体键——与后端 `PROTECTED_BODY_KEYS` 同步。
+ *
+ * 前端挡一道只是为了让用户早点看到问题；真正的关口在后端（那里会 400）。
+ * 名单不同步时以后端为准。
+ */
+const PROTECTED_EXTRA_BODY_KEYS = [
+  'model',
+  'messages',
+  'contents',
+  'input',
+  'system',
+  'system_instruction',
+  'stream',
+  'stream_options',
+  'tools',
+  'tool_choice',
+];
+
+/**
+ * 额外请求体输入（JSON 对象，草稿模式）。
+ *
+ * 编辑期间**不回写**受控值再回灌显示——中途的 `{"top_k": 4` 不是合法
+ * JSON，强行回写会把用户正在打的字吃掉。合法即提交，非法只提示。
+ */
+function ExtraBodyInput({
+  modelName,
+  value,
+  onCommit,
+}: {
+  modelName: string;
+  value?: Record<string, unknown>;
+  onCommit: (next: Record<string, unknown> | undefined) => void;
+}) {
+  const [draft, setDraft] = useState(() => (value ? JSON.stringify(value) : ''));
+  const [error, setError] = useState<string | null>(null);
+
+  const handle = (raw: string) => {
+    setDraft(raw);
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setError(null);
+      onCommit(undefined);
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      setError('不是合法的 JSON');
+      return;
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setError('必须是 JSON 对象，例如 {"top_k": 40}');
+      return;
+    }
+
+    const blocked = Object.keys(parsed).filter((key) => PROTECTED_EXTRA_BODY_KEYS.includes(key));
+    if (blocked.length > 0) {
+      setError(`这些字段由网关掌管，不能覆盖：${blocked.join('、')}`);
+      return;
+    }
+
+    setError(null);
+    const object = parsed as Record<string, unknown>;
+    // 空对象视同没配——和后端的口径一致。
+    onCommit(Object.keys(object).length > 0 ? object : undefined);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`extra-body-${modelName}`}>额外请求体（高级）</Label>
+      <Textarea
+        id={`extra-body-${modelName}`}
+        value={draft}
+        onChange={(e) => handle(e.target.value)}
+        rows={3}
+        spellCheck={false}
+        placeholder='{"top_k": 40}'
+        className="rounded-lg font-mono text-xs"
+      />
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          按上游格式书写，顶层合并；网关掌管的字段（model / messages / stream 等）会被拒。
+          只有管理端能配，下游请求体里带同名键无效。
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * 块的模型编辑器。
@@ -237,6 +332,15 @@ export function ModelEditor({
                       {formatMultiplier(model.multiplier_bp)}×
                     </Badge>
                   )}
+                  {model.extra_body && Object.keys(model.extra_body).length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 font-mono text-[11px]"
+                      title="配了额外请求体"
+                    >
+                      +{Object.keys(model.extra_body).length}
+                    </Badge>
+                  )}
                   {/* 转发名与倍率是低频设置，收进二级弹层 */}
                   <Popover>
                     <PopoverTrigger asChild>
@@ -275,6 +379,11 @@ export function ModelEditor({
                           1.00 = 原价，精度 0.01；只影响这个块里的这个模型
                         </p>
                       </div>
+                      <ExtraBodyInput
+                        modelName={model.name}
+                        value={model.extra_body}
+                        onCommit={(next) => patch(model.name, { extra_body: next })}
+                      />
                     </PopoverContent>
                   </Popover>
                   <Button

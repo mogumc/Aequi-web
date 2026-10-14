@@ -172,6 +172,13 @@ export interface IBlockModel {
   forward?: string;
   /** 计费倍率，万分比整数（10000 = 1.0 倍）。倍率跟着模型走，模型属于块。 */
   multiplier_bp?: number;
+  /**
+   * 额外请求体：只允许管理端配置，下游请求体里的同名键会被丢弃。
+   *
+   * 按上游格式书写（块绑的是哪家就写哪家），顶层浅合并进发往上游的请求体。
+   * 网关掌管的键（model / messages / stream 等）不许覆盖，后端会拒。
+   */
+  extra_body?: Record<string, unknown>;
 }
 
 /**
@@ -212,6 +219,12 @@ export interface IUpstreamBlock {
   enabled: boolean;
   key_count?: number;
   available_keys?: number;
+  /** 同时发往该上游的请求数上限。0 = 不限制；达到上限后新请求排队。 */
+  max_concurrency?: number;
+  /** 正在发往上游的请求数（读取瞬间的快照）；不限制并发时为 null。 */
+  in_flight?: number | null;
+  /** 排在并发闸门后的请求数（快照）；持续大于 0 说明上限打满。 */
+  queued?: number | null;
   created_at?: number;
   updated_at?: number;
 }
