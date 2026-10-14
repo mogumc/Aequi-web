@@ -172,6 +172,13 @@ export interface IBlockModel {
   forward?: string;
   /** 计费倍率，万分比整数（10000 = 1.0 倍）。倍率跟着模型走，模型属于块。 */
   multiplier_bp?: number;
+  /**
+   * 额外请求体：只允许管理端配置，下游请求体里的同名键会被丢弃。
+   *
+   * 按上游格式书写（块绑的是哪家就写哪家），顶层浅合并进发往上游的请求体。
+   * 网关掌管的键（model / messages / stream 等）不许覆盖，后端会拒。
+   */
+  extra_body?: Record<string, unknown>;
 }
 
 /**
