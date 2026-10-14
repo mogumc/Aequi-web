@@ -198,6 +198,8 @@ export interface IBlockInput {
   name: string;
   api_format: 'openai' | 'google' | 'anthropic';
   weight: number;
+  /** 同时发往该上游的请求数上限。0 = 不限制（缺省），最大 1024。 */
+  max_concurrency?: number;
   base_url: string;
   proxy: string | null;
   models: IBlockModel[];
@@ -235,6 +237,14 @@ export interface IUpstreamKey {
   block_id: string;
   secret: string;
   status: 'active' | 'paused' | 'disabled';
+  /**
+   * 免于被**自动停用**（连续硬失败够次数也不停）。
+   *
+   * 只免自动停用这一个动作：429 与瞬时故障的指数退避照常，
+   * 手动暂停/恢复不受影响，手动测试确认无效仍然停用。
+   */
+  never_disable: boolean;
+  /** 块内调度权重（块内多把密钥按平滑加权轮询分配）。 */
   weight: number;
   failure_count: number;
   cooldown_until: number | null;

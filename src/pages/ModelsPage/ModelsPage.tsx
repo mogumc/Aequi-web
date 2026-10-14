@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExtraBodyInput } from '@/components/extra-body-input';
 import { ModelApplyKeysDialog } from '@/components/model-apply-keys';
 import type { IBlockModel, IUpstreamBlock } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
@@ -162,6 +163,7 @@ export default function ModelsPage() {
     target: IEditTarget,
     forward: string,
     multiplierText: string,
+    extraBody: Record<string, unknown> | undefined,
     onDone: () => void,
   ) => {
     if (saving) return;
@@ -177,7 +179,7 @@ export default function ModelsPage() {
     }
     const models: IBlockModel[] = block.models.map((m) =>
       m.name === target.modelName
-        ? { ...m, forward: forward.trim() || undefined, multiplier_bp: bp }
+        ? { ...m, forward: forward.trim() || undefined, multiplier_bp: bp, extra_body: extraBody }
         : m,
     );
     setSaving(true);
@@ -206,7 +208,7 @@ export default function ModelsPage() {
               <Cpu className="size-5 text-primary" /> 模型
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              同名模型合并展示，展开查看它在各块里的路由（调用写法、转发名、倍率），
+              同名模型合并展示，展开查看它在各块里的路由（调用写法、转发名、倍率、额外请求体），
               点击「修改」可直接调整某条路由——请求时用「块/模型」写法锁定某个块，
               只写模型名则在提供它的块之间轮询。在「修改」里点「快速应用」，
               还能把这条路由一次性地加进、或从多把访问密钥的白名单里移除。
@@ -308,49 +310,68 @@ export default function ModelsPage() {
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {list.map((row) => (
-                                      <TableRow key={`${row.blockId}/${name}`}>
-                                        <TableCell>
-                                          <code
-                                            className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
-                                            title="请求里用这个写法可以锁定该块"
-                                          >
-                                            {row.blockId}/{name}
-                                          </code>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                          <span className="flex items-center gap-1.5 text-xs">
-                                            {row.blockName}
-                                            {!row.blockEnabled && <Badge variant="outline">已停用</Badge>}
-                                          </span>
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                          {row.apiFormat}
-                                        </TableCell>
-                                        <TableCell className="font-mono text-xs text-muted-foreground">
-                                          {row.model.forward || '同名'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                                          {formatMultiplier(row.model.multiplier_bp)}×
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 rounded-full text-xs"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setEditTarget({
-                                                blockId: row.blockId,
-                                                modelName: name,
-                                              });
-                                            }}
-                                          >
-                                            <Pencil className="size-3.5" /> 修改
-                                          </Button>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
+                                    {list.map((row) => {
+                                      // 额外请求体只报个数：键名可能很多，展开会撑破行。
+                                      const extraKeys = Object.keys(row.model.extra_body ?? {});
+                                      return (
+                                        <TableRow key={`${row.blockId}/${name}`}>
+                                          <TableCell>
+                                            <code
+                                              className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs"
+                                              title="请求里用这个写法可以锁定该块"
+                                            >
+                                              {row.blockId}/{name}
+                                            </code>
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground">
+                                            <span className="flex items-center gap-1.5 text-xs">
+                                              {row.blockName}
+                                              {!row.blockEnabled && (
+                                                <Badge variant="outline">已停用</Badge>
+                                              )}
+                                            </span>
+                                          </TableCell>
+                                          <TableCell className="text-xs text-muted-foreground">
+                                            {row.apiFormat}
+                                          </TableCell>
+                                          <TableCell className="font-mono text-xs text-muted-foreground">
+                                            {row.model.forward || '同名'}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <span className="inline-flex items-center gap-1.5">
+                                              {extraKeys.length > 0 && (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="font-mono text-[11px]"
+                                                  title={`额外请求体：${extraKeys.join('、')}`}
+                                                >
+                                                  +{extraKeys.length}
+                                                </Badge>
+                                              )}
+                                              <span className="font-mono text-xs tabular-nums">
+                                                {formatMultiplier(row.model.multiplier_bp)}×
+                                              </span>
+                                            </span>
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 rounded-full text-xs"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditTarget({
+                                                  blockId: row.blockId,
+                                                  modelName: name,
+                                                });
+                                              }}
+                                            >
+                                              <Pencil className="size-3.5" /> 修改
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
                                   </TableBody>
                                 </Table>
                               </div>
@@ -367,7 +388,7 @@ export default function ModelsPage() {
         </CardContent>
       </Card>
 
-      {/* 编辑单条路由（块/模型）的转发名与倍率 */}
+      {/* 编辑单条路由（块/模型）的转发名、倍率与额外请求体 */}
       {editTarget && (
         <ModelRouteDialog
           key={`${editTarget.blockId}/${editTarget.modelName}`}
@@ -377,8 +398,8 @@ export default function ModelsPage() {
           saving={saving}
           onOpenChange={(v) => !v && setEditTarget(null)}
           onQuickApply={() => setApplyTarget(editTarget)}
-          onSave={(forward, multiplierText, onDone) =>
-            void onSaveRoute(editTarget, forward, multiplierText, onDone)
+          onSave={(forward, multiplierText, extraBody, onDone) =>
+            void onSaveRoute(editTarget, forward, multiplierText, extraBody, onDone)
           }
         />
       )}
@@ -397,7 +418,7 @@ export default function ModelsPage() {
   );
 }
 
-/** 单条路由的编辑弹窗：只改转发名与倍率，其余模型条目原样保留。 */
+/** 单条路由的编辑弹窗：只改转发名、倍率与额外请求体，其余模型条目原样保留。 */
 function ModelRouteDialog({
   target,
   block,
@@ -414,11 +435,19 @@ function ModelRouteDialog({
   onOpenChange: (v: boolean) => void;
   /** 打开「快速应用」：把这条路由在若干密钥的白名单里增删。 */
   onQuickApply: () => void;
-  onSave: (forward: string, multiplierText: string, onDone: () => void) => void;
+  onSave: (
+    forward: string,
+    multiplierText: string,
+    extraBody: Record<string, unknown> | undefined,
+    onDone: () => void,
+  ) => void;
 }) {
   const entry = block?.models.find((m) => m.name === target.modelName);
   const [forward, setForward] = useState(entry?.forward ?? '');
   const [multiplierText, setMultiplierText] = useState(formatMultiplier(entry?.multiplier_bp));
+  const [extraBody, setExtraBody] = useState<Record<string, unknown> | undefined>(
+    entry?.extra_body,
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -456,6 +485,11 @@ function ModelRouteDialog({
               1.00 = 原价，精度 0.01，按 token 消耗乘以该倍率计费
             </p>
           </div>
+          <ExtraBodyInput
+            id={`route-extra-body-${target.blockId}-${target.modelName}`}
+            value={extraBody}
+            onCommit={setExtraBody}
+          />
         </div>
         <DialogFooter className="sm:justify-between">
           <Button
@@ -473,7 +507,7 @@ function ModelRouteDialog({
             <Button
               className="rounded-full"
               disabled={saving}
-              onClick={() => onSave(forward, multiplierText, () => onOpenChange(false))}
+              onClick={() => onSave(forward, multiplierText, extraBody, () => onOpenChange(false))}
             >
               {saving ? '保存中…' : '保存'}
             </Button>

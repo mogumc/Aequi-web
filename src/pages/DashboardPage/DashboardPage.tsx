@@ -236,7 +236,7 @@ export default function DashboardPage() {
       <Card className="rounded-2xl border-none shadow-xs">
         <CardHeader>
           <CardTitle className="text-xl">最近 12 小时请求趋势</CardTitle>
-          <CardDescription>请求量与错误量（按小时聚合，数据来自 /api/logs）</CardDescription>
+          <CardDescription>请求量与错误量（按小时聚合）</CardDescription>
         </CardHeader>
         <CardContent>
           {logs ? (
