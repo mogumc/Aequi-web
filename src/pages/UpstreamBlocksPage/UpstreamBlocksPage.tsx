@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -112,7 +112,14 @@ function BlockKeysDialog({
   const [testModel, setTestModel] = useState('');
 
   const blockId = block?.id ?? '';
-  const blockModels = block?.models ?? [];
+  // 兜底的空数组要 memo：直接写 `?? []` 每次渲染都是新引用，
+  // 会把下面那个收敛测试模型的 effect 变成每渲染必跑。
+  const blockModels = useMemo(() => block?.models ?? [], [block?.models]);
+
+  // 能不能发测试请求：要有模型可指定，且没有别的测试在跑。
+  // 单把与「一键测试全部」共用，免得两处各判一半（曾经单把按钮漏判模型）。
+  const canTest = blockModels.length > 0 && testAll === null && busyId === null;
+  const testBlockedReason = blockModels.length === 0 ? '先在块里配置一个模型，再测试密钥' : null;
 
   // 换块或模型清单变化时把测试模型收敛到清单里的一个，避免选中已删掉的模型。
   useEffect(() => {
@@ -431,7 +438,7 @@ function BlockKeysDialog({
                 variant="outline"
                 size="sm"
                 className={`${blockModels.length > 0 ? '' : 'ml-auto '}h-8 rounded-full text-xs`}
-                disabled={testAll !== null || busyId !== null || blockModels.length === 0}
+                disabled={!canTest}
                 onClick={() => void onTestAll()}
               >
                 {testAll ? (
@@ -539,10 +546,13 @@ function BlockKeysDialog({
                         size="icon"
                         variant="ghost"
                         className="size-7 rounded-full"
-                        disabled={busyId === k.id || testAll !== null}
+                        disabled={!canTest}
                         onClick={() => void onTest(k.id)}
                         aria-label="测试密钥"
-                        title={`用模型 ${testModel || '（未选）'} 发一次真实请求测试，会消耗少量 token`}
+                        title={
+                          testBlockedReason ??
+                          `用模型 ${testModel} 发一次真实请求测试，会消耗少量 token`
+                        }
                       >
                         {busyId === k.id ? (
                           <Loader2 className="size-4 animate-spin" />
