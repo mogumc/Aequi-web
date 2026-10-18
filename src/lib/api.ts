@@ -43,11 +43,13 @@ function readItem(key: string): string | null {
   }
 }
 
-function writeItem(key: string, value: string): void {
+function writeItem(key: string, value: string): boolean {
   try {
     window.localStorage.setItem(key, value);
+    return true;
   } catch {
-    /* 写不进去就当作没保存 */
+    /* 写不进去就当作没保存，由调用方决定是否提示 */
+    return false;
   }
 }
 
@@ -96,8 +98,15 @@ export function getAccessKey(): string | null {
   return readItem(ACCESS_KEY_KEY);
 }
 
-export function setAccessKey(secret: string): void {
-  writeItem(ACCESS_KEY_KEY, secret);
+/**
+ * 写入访问密钥。
+ *
+ * 返回 `false` 说明本机存不下（隐私模式、配额满）——此时服务端那边已经换串了，
+ * 旧凭证还在/不在本机都不重要了，调用方必须提示用户手动保存新明文，
+ * 否则一刷新就是 401 且明文已经不在页面上。
+ */
+export function setAccessKey(secret: string): boolean {
+  return writeItem(ACCESS_KEY_KEY, secret);
 }
 
 export function clearAccessKey(): void {
@@ -185,6 +194,14 @@ export const api = {
     ),
   keyModels: () =>
     request<{ models: IKeyModel[] }>('/api/key/models', undefined, 'portal'),
+  /**
+   * 重置自己的密钥：`id` 与额度不变，旧密钥立即失效。
+   *
+   * 响应里的 `secret` 是新明文，只在这里给一次；调用方必须把本机存的
+   * 访问密钥同步换成它，否则下一次请求就是 401。
+   */
+  keyReset: () =>
+    request<{ secret: string; key: IKeySelf }>('/api/key/me/reset', { method: 'POST' }, 'portal'),
 
   // ---- 认证与会话 ----
   login: (body: { username: string; password: string; otp?: string }) =>
@@ -263,6 +280,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(patch),
     }),
+  /** 重置密钥值：`id`、额度、白名单、启用状态都不变，旧密钥立即失效。 */
+  resetKeySecret: (id: string) =>
+    request<IAccessKey>(`/api/keys/${id}/reset`, { method: 'POST' }),
 
   // ---- 上游块 ----
   listBlocks: async () => {

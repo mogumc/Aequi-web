@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, KeyRound, LogOut, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, KeyRound, LogOut, RefreshCw, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Toaster } from '@/components/ui/sonner';
@@ -24,7 +32,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { IKeyModel, IKeySelf, IKeyUsage, IUsageRecord } from '@/data/admin';
-import { api, clearAccessKey, getAccessKey, isUnauthorized } from '@/lib/api';
+import { api, clearAccessKey, getAccessKey, isUnauthorized, setAccessKey } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { formatCompact, formatCredits, formatDateTime } from '@/lib/format';
 
 /** 同名模型合并成一组（模型名是主键），展开看它在各块里的路由。 */
@@ -37,7 +46,7 @@ interface IModelRouteGroup {
  * 密钥自助视图。
  *
  * 用访问密钥登录后进入这里：只看得到这把密钥自己的余额与用量，
- * 没有任何管理能力（后端的 `/api/key/*` 只有三个只读接口）。
+ * 除了重置自己的密钥（换一串凭证，id 与额度不变）没有任何写能力。
  */
 export default function KeyPortalPage() {
   const navigate = useNavigate();
@@ -52,6 +61,11 @@ export default function KeyPortalPage() {
   /** 「用量记录」这一块自己的刷新态，与整页的 `loading` 分开。 */
   const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [error, setError] = useState('');
+
+  // 重置自己的密钥：确认 → 换新串 → 展示新明文（本地存的凭证同步换掉）
+  const [rotateOpen, setRotateOpen] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -192,6 +206,46 @@ export default function KeyPortalPage() {
     navigate('/login', { replace: true });
   };
 
+  /**
+   * 重置自己的密钥。
+   *
+   * 旧密钥在服务端立刻失效，所以本机存的凭证必须同一个动作里换成新的——
+   * 否则下一次刷新就是 401，人被自己的操作踢出去。页面上的其他数据
+   * （余额、用量、模型）都挂在同一个 id 上，不必重取。
+   */
+  const onRotate = async () => {
+    if (rotating) return;
+    setRotating(true);
+    try {
+      const res = await api.keyReset();
+      // 服务端此刻已经换串了：本机存不下就必须让人立刻复制走，
+      // 否则一刷新 401、明文又只剩弹窗里那一份。
+      const stored = setAccessKey(res.secret);
+      setSelf(res.key);
+      setRotateOpen(false);
+      setRotatedSecret(res.secret);
+      if (stored) toast.success('密钥已重置，旧密钥已失效');
+      else toast.error('密钥已重置，但新密钥保存到本机失败，请立即复制保存');
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearAccessKey();
+        toast.error('密钥已失效，请重新登录');
+        navigate('/login', { replace: true });
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : '重置失败，请稍后重试');
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const copySecret = async () => {
+    if (!rotatedSecret) return;
+    const ok = await copyToClipboard(rotatedSecret);
+    if (ok) toast.success('已复制到剪贴板');
+    else toast.error('复制失败，请手动选择复制');
+  };
+
   // 没带密钥就直接回登录页（凭证被清掉时也会走到这里）。
   if (!getAccessKey()) {
     return <Navigate to="/login" replace />;
@@ -216,6 +270,10 @@ export default function KeyPortalPage() {
             <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
               刷新
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setRotateOpen(true)}>
+              <KeyRound className="size-4" />
+              重置密钥
             </Button>
             <Button variant="outline" size="sm" onClick={logout}>
               <LogOut className="size-4" />
@@ -614,6 +672,54 @@ export default function KeyPortalPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* 重置自己的密钥：换串凭证，id 与额度不动 */}
+      <Dialog open={rotateOpen} onOpenChange={(v) => !v && setRotateOpen(false)}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重置密钥</DialogTitle>
+            <DialogDescription>
+              换一串新密钥，余额、可用模型与用量记录都不变。旧密钥立即失效——
+              正在用它的程序会马上连不上，请重置后立刻把新密钥填进去。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" className="rounded-full" onClick={() => setRotateOpen(false)}>
+              取消
+            </Button>
+            <Button className="rounded-full" disabled={rotating} onClick={() => void onRotate()}>
+              {rotating ? '重置中…' : '确认重置'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 新明文只在这里出现一次 */}
+      <Dialog open={rotatedSecret !== null} onOpenChange={(v) => !v && setRotatedSecret(null)}>
+        <DialogContent className="rounded-2xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>新密钥已生效</DialogTitle>
+            <DialogDescription>旧密钥已失效。请把新密钥保存好，关闭后不再展示</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+            <code className="min-w-0 flex-1 break-all font-mono text-sm">{rotatedSecret}</code>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 shrink-0 rounded-full"
+              onClick={() => void copySecret()}
+              aria-label="复制密钥"
+            >
+              <Copy className="size-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button className="rounded-full" onClick={() => setRotatedSecret(null)}>
+              我已保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Toaster position="top-center" richColors />
     </div>

@@ -157,6 +157,11 @@ export default function AccessKeysPage() {
   const [deleteKey, setDeleteKey] = useState<IAccessKey | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
+  // 重置密钥值：id 与额度不变，换一串新密钥，旧密钥立刻失效
+  const [rotateKey, setRotateKey] = useState<IAccessKey | null>(null);
+  /** 重置后的新明文，只在这个弹窗里出现一次。 */
+  const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
+
   // 用量视图
   const [usageKey, setUsageKey] = useState<IAccessKey | null>(null);
 
@@ -324,6 +329,28 @@ export default function AccessKeysPage() {
     } finally {
       setSaving(false);
       setCreditKey(null);
+    }
+  };
+
+  const onRotateSecret = async () => {
+    if (!rotateKey || saving) return;
+    setSaving(true);
+    try {
+      const updated = await api.resetKeySecret(rotateKey.id);
+      setKeys((prev) => prev?.map((k) => (k.id === updated.id ? updated : k)) ?? prev);
+      // 明文换了一串，之前展开的那一行不再有意义
+      setRevealedId(null);
+      setRotatedSecret(updated.secret ?? null);
+      toast.success('密钥已重置，旧密钥已失效');
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        handleAuthFail();
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : '重置失败，请稍后重试');
+    } finally {
+      setSaving(false);
+      setRotateKey(null);
     }
   };
 
@@ -519,6 +546,9 @@ export default function AccessKeysPage() {
                               }}
                             >
                               调整额度
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setRotateKey(k)}>
+                              重置密钥
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
@@ -738,6 +768,54 @@ export default function AccessKeysPage() {
             </Button>
             <Button className="rounded-full" disabled={saving} onClick={() => void onResetCredits()}>
               {saving ? '提交中…' : '确认重置'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 重置密钥值（主键与额度都不动，旧密钥立刻失效） */}
+      <Dialog open={rotateKey !== null} onOpenChange={(v) => !v && setRotateKey(null)}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重置密钥</DialogTitle>
+            <DialogDescription>
+              为「{rotateKey?.name || '未命名'}」换一串新密钥。密钥 ID、额度、白名单与启用状态都不变，
+              但旧密钥立即失效——正在用它的程序会马上连不上，需要换上新的。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" className="rounded-full" onClick={() => setRotateKey(null)}>
+              取消
+            </Button>
+            <Button className="rounded-full" disabled={saving} onClick={() => void onRotateSecret()}>
+              {saving ? '重置中…' : '确认重置'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 重置后的新明文（同样只出现这一次） */}
+      <Dialog open={rotatedSecret !== null} onOpenChange={(v) => !v && setRotatedSecret(null)}>
+        <DialogContent className="rounded-2xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>新密钥已生效</DialogTitle>
+            <DialogDescription>旧密钥已失效。新明文只在这里出现一次，请立即保存</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+            <code className="min-w-0 flex-1 break-all font-mono text-sm">{rotatedSecret}</code>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 shrink-0 rounded-full"
+              onClick={() => rotatedSecret && void copyText(rotatedSecret, '已复制到剪贴板')}
+              aria-label="复制密钥"
+            >
+              <Copy className="size-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button className="rounded-full" onClick={() => setRotatedSecret(null)}>
+              我已保存
             </Button>
           </DialogFooter>
         </DialogContent>
