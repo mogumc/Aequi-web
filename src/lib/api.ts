@@ -4,6 +4,7 @@ import type {
   IAccessKey,
   IAdminAccount,
   IBlockInput,
+  IDashboardStats,
   IDeviceInfo,
   IHealth,
   IKeyListResponse,
@@ -368,6 +369,17 @@ export const api = {
       method: 'POST',
       ...(model ? { body: JSON.stringify({ model }) } : {}),
     }),
+
+  // ---- 首页看板 ----
+  /**
+   * 首页专用快照：当日成功/失败/总数、最近几条错误、密钥计数、额度预警
+   * 与最近 24 个整点的请求量。
+   *
+   * 口径全在服务端定（「今天」按本地 0 点切、小时桶按整点且缺的补零），
+   * 前端只显示不再自己算——以前那套「拉 500 条日志再过滤」既不是完整的
+   * 当日，又把用不上的字段搬进了浏览器。
+   */
+  dashboard: () => request<IDashboardStats>('/api/stats/dashboard'),
 
   // ---- 请求日志 ----
   /**

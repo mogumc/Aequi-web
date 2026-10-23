@@ -25,9 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  type IAccessKey,
+  type IDashboardStats,
   type IHealth,
-  type IRequestLog,
 } from '@/data/admin';
 import { api, clearToken, isUnauthorized } from '@/lib/api';
 import { formatCredits } from '@/lib/format';
@@ -43,10 +42,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [health, setHealth] = useState<IHealth | null>(null);
   const [healthDown, setHealthDown] = useState(false);
-  const [keys, setKeys] = useState<IAccessKey[] | null>(null);
-  const [logs, setLogs] = useState<IRequestLog[] | null>(null);
-  // 趋势与筛选的时间基准：固定于挂载时刻，免得在 useMemo 里取当前时间。
-  const [nowSec] = useState(() => Math.floor(Date.now() / 1000));
+  // 看板的数字全在服务端算好（当日口径、24 个整点桶），这里只负责显示。
+  const [stats, setStats] = useState<IDashboardStats | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -65,9 +62,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const [k, { logs }] = await Promise.all([api.listKeys(), api.listLogs(500)]);
-      setKeys(k.keys);
-      setLogs(logs);
+      setStats(await api.dashboard());
     } catch (e) {
       if (isUnauthorized(e)) {
         clearToken();
@@ -84,42 +79,34 @@ export default function DashboardPage() {
   }, [load]);
 
   const kpis = useMemo(() => {
-    if (!keys || !logs) return null;
-    const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
-    const todayLogs = logs.filter((l) => l.created_at >= todayStart);
-    const todayErrors = todayLogs.filter((l) => l.status === 'error').length;
+    if (!stats) return null;
+    const { today, keys, low_credits } = stats;
     return {
-      activeKeys: keys.filter((k) => k.enabled).length,
-      totalKeys: keys.length,
-      todayRequests: todayLogs.length,
-      todayErrorRate: todayLogs.length
-        ? ((todayErrors / todayLogs.length) * 100).toFixed(1)
+      activeKeys: keys.enabled,
+      totalKeys: keys.total,
+      todayRequests: today.requests,
+      todaySuccess: today.success,
+      todayFailed: today.failed,
+      todayErrorRate: today.requests
+        ? ((today.failed / today.requests) * 100).toFixed(1)
         : '0.0',
-      // 无限额度的密钥不参与余额判定，与下方 alerts 的口径保持一致。
-      lowCredit: keys.filter((k) => k.enabled && !k.unlimited && Number(k.credits) < 5).length,
+      lowCredit: low_credits.count,
+      // 阈值由服务端给，界面直接显示——两边各写一个「5 积分」迟早对不上。
+      lowCreditThreshold: formatCredits(low_credits.threshold),
     };
-  }, [keys, logs]);
+  }, [stats]);
 
   const trend = useMemo(() => {
-    if (!logs) return [];
-    const start = nowSec - 11 * 3600;
-    const buckets = Array.from({ length: 12 }, (_, i) => ({
-      label: format(fromUnixTime(start + i * 3600), 'HH:00'),
-      requests: 0,
-      errors: 0,
+    if (!stats) return [];
+    return stats.hourly.map((point) => ({
+      label: format(fromUnixTime(point.hour), 'HH:00'),
+      requests: point.requests,
+      errors: point.failed,
     }));
-    for (const log of logs) {
-      const idx = Math.floor((log.created_at - start) / 3600);
-      if (idx >= 0 && idx < 12) {
-        buckets[idx].requests += 1;
-        if (log.status === 'error') buckets[idx].errors += 1;
-      }
-    }
-    return buckets;
-  }, [logs, nowSec]);
+  }, [stats]);
 
   const alerts = useMemo(() => {
-    if (!keys || !logs) return [];
+    if (!stats) return [];
     const items: {
       id: string;
       kind: 'error' | 'credit';
@@ -127,17 +114,17 @@ export default function DashboardPage() {
       desc: string;
       to: string;
     }[] = [];
-    for (const log of logs.filter((l) => l.status === 'error').slice(0, 3)) {
+    for (const error of stats.recent_errors) {
       items.push({
-        id: `e${log.id}`,
+        id: `e${error.id}`,
         kind: 'error',
-        title: `${log.model} 请求失败`,
-        desc: log.error_detail ?? '上游错误',
+        title: `${error.model} 请求失败`,
+        desc: error.error_detail ?? '上游错误',
         to: '/logs',
       });
     }
-    // 无限额度的密钥不参与余额判定，也就不该出现在额度预警里。
-    for (const key of keys.filter((k) => k.enabled && !k.unlimited && Number(k.credits) < 5)) {
+    // 服务端已经把无限额度与停用的密钥排除在预警之外。
+    for (const key of stats.low_credits.keys) {
       items.push({
         id: `c${key.id}`,
         kind: 'credit',
@@ -147,7 +134,7 @@ export default function DashboardPage() {
       });
     }
     return items.slice(0, 5);
-  }, [keys, logs]);
+  }, [stats]);
 
   return (
     <div className="space-y-6">
@@ -195,7 +182,9 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-medium tabular-nums">{kpis.todayRequests}</p>
-                <p className="mt-1 text-xs text-muted-foreground">来自最近请求流水</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  成功 {kpis.todaySuccess} · 失败 {kpis.todayFailed}
+                </p>
               </CardContent>
             </Card>
             <Card className="rounded-2xl border-none shadow-xs">
@@ -217,7 +206,9 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-medium tabular-nums">{kpis.lowCredit}</p>
-                <p className="mt-1 text-xs text-muted-foreground">剩余额度不足 5 积分</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  剩余额度不足 {kpis.lowCreditThreshold} 积分
+                </p>
               </CardContent>
             </Card>
           </>
@@ -235,11 +226,11 @@ export default function DashboardPage() {
 
       <Card className="rounded-2xl border-none shadow-xs">
         <CardHeader>
-          <CardTitle className="text-xl">最近 12 小时请求趋势</CardTitle>
-          <CardDescription>请求量与错误量（按小时聚合）</CardDescription>
+          <CardTitle className="text-xl">最近 24 小时请求趋势</CardTitle>
+          <CardDescription>按整点聚合，没有流量的整点记 0</CardDescription>
         </CardHeader>
         <CardContent>
-          {logs ? (
+          {stats ? (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trend} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>

@@ -1,4 +1,4 @@
-// EXPORTS: IHealth, ILoginResponse, IProvider, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IKeyListResponse, IBlockHeader, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IKeySelf, IUsageSummary, IUsageRecord, IKeyUsage, IRequestLog
+// EXPORTS: IHealth, ILoginResponse, IProvider, IAdminAccount, IDeviceInfo, IOtpStatus, ISystemSettings, IAccessKey, IKeyListResponse, IBlockHeader, IBlockModel, IBlockInput, IUpstreamBlock, IUpstreamKey, IKeySelf, IUsageSummary, IUsageRecord, IKeyUsage, IRequestLog, IDashboardToday, IDashboardError, IDashboardLowCreditKey, IDashboardLowCredits, IDashboardHourlyPoint, IDashboardStats
 
 // ---- 公开接口 ----
 
@@ -240,8 +240,9 @@ export interface IUpstreamKey {
   /**
    * 免于被**自动停用**（连续硬失败够次数也不停）。
    *
-   * 只免自动停用这一个动作：429 与瞬时故障的指数退避照常，
-   * 手动暂停/恢复不受影响，手动测试确认无效仍然停用。
+   * 只免自动停用这一个动作：429 的退避照常（那是临时避让，不是停用），
+   * 上游 5xx 本来就不动密钥状态；手动暂停/恢复不受影响，
+   * 手动测试确认无效仍然停用。
    */
   never_disable: boolean;
   /** 块内调度权重（块内多把密钥按平滑加权轮询分配）。 */
@@ -275,4 +276,64 @@ export interface IRequestLog {
   /** 是否流式请求。 */
   stream: boolean;
   credits: string;
+}
+
+// ---- 首页看板（GET /api/stats/dashboard）----
+//
+// 这些数字全在服务端算好再回来：以前首页拉 500 条日志自己过滤，窗口既不是
+// 「当日」，也把 IP、UA、重试链这些用不上的字段搬进了浏览器。
+
+/** 今日请求计数（本地时区当天 0 点起）。 */
+export interface IDashboardToday {
+  requests: number;
+  success: number;
+  failed: number;
+}
+
+/** 首页「最近错误」的一条，只带首页要显示的那几列。 */
+export interface IDashboardError {
+  id: number;
+  created_at: number;
+  model: string;
+  block_id: string | null;
+  /** 详细错误，可能含上游原话与整条重试链。 */
+  error_detail: string | null;
+}
+
+/** 额度预警里的一把密钥。 */
+export interface IDashboardLowCreditKey {
+  id: string;
+  name: string;
+  /** 剩余积分，四位小数字符串。 */
+  credits: string;
+  credits_scaled: number;
+}
+
+/** 额度预警：命中总数与余额最低的几把明细。 */
+export interface IDashboardLowCredits {
+  /** 判定线（四位小数字符串）——由服务端定，界面直接显示，别在前端写死。 */
+  threshold: string;
+  threshold_scaled: number;
+  /** 命中的总数；`keys` 只给最低的几把。 */
+  count: number;
+  keys: IDashboardLowCreditKey[];
+}
+
+/** 按整点统计的一个点。 */
+export interface IDashboardHourlyPoint {
+  /** 该小时的起点，Unix 秒（整点）。 */
+  hour: number;
+  requests: number;
+  failed: number;
+}
+
+/** 首页看板快照。 */
+export interface IDashboardStats {
+  today: IDashboardToday;
+  /** 最近几条失败，新的在前。 */
+  recent_errors: IDashboardError[];
+  keys: { total: number; enabled: number };
+  low_credits: IDashboardLowCredits;
+  /** 最近 24 个整点，从旧到新；最后一个桶是当前这一小时（未满）。 */
+  hourly: IDashboardHourlyPoint[];
 }
